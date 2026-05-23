@@ -45,8 +45,24 @@ pip install -r requirements.txt
 python main.py
 ```
 
+## Farming notes
+- Sprites are optional; the game draws placeholders if files are missing.
+- Plant stats and sprite filenames live in `plants.py`.
+- Item sell prices live in `items.py`.
+
+## Adding a new plant
+1. Add a new subclass in `plants.py` with its stats, icon, and phase sprites.
+2. Register the plant by adding an instance to `Game.seeds` in `game.py`.
+3. (Optional) Add its item price to `items.py` if it produces a new product.
+4. Drop any new sprites into `props/` and list them in `props/README.md`.
+
 ## Controls
-Figure it out yourself. Try clicking somewhere, try arrow keys, space bar, enter keys or any other special keys.
+- Arrow keys: move cloud
+- Click cloud: toggle rain
+- Drag or click seed to plant
+- Click harvestable plant to collect
+- Click dead plant to clear
+- ESC: quit
 
 ## Project structure
 
@@ -57,6 +73,9 @@ pass_the_game/
 ├── game.py          # Game class – main loop, update, draw
 ├── cloud.py         # Cloud sprite + RainDrop helper
 ├── sun.py           # Sun sprite
+├── farming.py       # PlantSlot state + rendering helpers
+├── plants.py        # Plant type definitions (stats + sprite names)
+├── items.py         # Item registry and sell prices
 ├── settings.py      # all tuneable constants live here
 ├── requirements.txt
 │
@@ -77,8 +96,8 @@ Add your name and 1–2 lines about what you added below.
 - **Nancy**  
   Created the base game: blue sky, a movable cloud, rain on click, and a sun that darkens the sky when covered.
 
-- **Your Name Here**  
-  What you added or changed
+- **Minh**  
+  Added farming: buying/planting seeds, keep plant alive with rain and sun, sell products for profit.
 
 ---
 
