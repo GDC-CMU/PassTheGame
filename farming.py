@@ -49,6 +49,14 @@ class PlantSlot:
         self.sun = 50.0
         self.dead = False
         self._bad_frames = 0.0
+    
+    def regrow(self, stage):
+        #reset to a specific grow stage, but keep seed planted
+        self.growth_stage = stage
+        self._growth_frames = 0
+        self.water = 50.0
+        self.sun = 50.0
+        self._bad_frames = 0.0
 
     def update(
         self,

@@ -11,11 +11,14 @@ from settings import (
     PLANT_BAD_SECONDS_TO_DIE, PLANT_BAD_RECOVERY_RATE,
     PLANT_GROWTH_RATE_GOOD, PLANT_GROWTH_RATE_BAD,
     PLANT_SPRITE_W, PLANT_SPRITE_H,
+    CLOUD_START_X, CLOUD_START_Y, CLOUD2_START_X, CLOUD2_START_Y,
 )
 from cloud import Cloud
 from sun import Sun
+from moon import Moon
+from stars import Stars
 from farming import PlantSlot
-from plants import PlantType, Carrot, Lettuce, Tomato
+from plants import PlantType, Carrot, Lettuce, Tomato, Apple
 from items import ITEMS
 
 PROPS_DIR = os.path.join(os.path.dirname(__file__), "props")
@@ -31,12 +34,27 @@ class Game:
         self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
         pygame.display.set_caption(TITLE)
         self.clock  = pygame.time.Clock()
+        self.paused = False
 
         # ── sprites ───────────────────────────────────────────────────────────
         self.sun   = Sun()
-        self.cloud = Cloud()
+        self.moon = Moon()
+        self.stars = Stars()
+        self._darkness = 0.0
+        
+        #controls for cloud2
+        WASD = {
+            "left": pygame.K_a,
+            "right": pygame.K_d,
+            "up": pygame.K_w,
+            "down": pygame.K_s,
+        }
+        self.clouds = {
+            Cloud(start_pos=(CLOUD_START_X, CLOUD_START_Y)),
+            Cloud(start_pos=(CLOUD2_START_X, CLOUD2_START_Y), controls=WASD)
+        }
 
-        self.all_sprites = pygame.sprite.Group(self.sun, self.cloud)
+        self.all_sprites = pygame.sprite.Group(self.sun, *self.clouds)
 
         # ── sky transition ────────────────────────────────────────────────────
         self._sky_color = list(SKY_DAY)   # mutable for lerp
@@ -51,7 +69,7 @@ class Game:
         )
 
         # Add new plants by instantiating PlantType subclasses here.
-        self.seeds: list[PlantType] = [Carrot(), Lettuce(), Tomato()]
+        self.seeds: list[PlantType] = [Carrot(), Lettuce(), Tomato(), Apple()]
         self.money = 20
         self.inventory: dict[str, int] = {}
         self.items = ITEMS
@@ -85,7 +103,11 @@ class Game:
                     running = False
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     running = False
-                self.cloud.handle_event(event)
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+                    self.paused = not self.paused
+                if not self.paused:
+                    for c in self.clouds:
+                        c.handle_event(event)
                 self._handle_farm_event(event)
 
             self._update()
@@ -99,20 +121,38 @@ class Game:
             self._money_flash_timer -= 1
 
         # lerp sky colour toward target
-        target = SKY_DARK if self.cloud.covers_sun(self.sun.circle_rect) else SKY_DAY
+        target = SKY_DARK if any(c.covers_sun(self.sun.circle_rect) for c in self.clouds) else SKY_DAY
         for i in range(3):
             diff = target[i] - self._sky_color[i]
             self._sky_color[i] += diff * 0.04   # smooth transition speed
 
-        self._update_plants()
+        #derive darkness level (uses red)
+        denominator = max(1, SKY_DAY[0] - SKY_DARK[0])
+        self._darkness = max(0.0, min(1.0, (SKY_DAY[0] - self._sky_color[0])/denominator ))
+        
+        if not self.paused:
+            for c in self.clouds:
+                c.update_movement()
+            self._update_plants()
+        self.stars.update(self.clock.get_time() / 1000.0)
 
     # ── draw ──────────────────────────────────────────────────────────────────
     def _draw(self):
         self.screen.fill(tuple(int(c) for c in self._sky_color))
 
-        self.screen.blit(self.sun.image, self.sun.rect)
-        self.cloud.draw_rain(self.screen)
-        self.screen.blit(self.cloud.image, self.cloud.rect)
+        self.stars.draw(self.screen, self._darkness)
+        sun_alpha = int(255 *(1 - self._darkness))
+        moon_alpha = int (255 * self._darkness)
+        if sun_alpha > 0:
+            self.sun.image.set_alpha(sun_alpha)
+            self.screen.blit(self.sun.image, self.sun.rect)
+        if moon_alpha > 0:
+            self.moon.image.set_alpha(moon_alpha)
+            self.screen.blit(self.moon.image, self.moon.rect)
+        
+        for c in self.clouds:
+            c.draw_rain(self.screen)
+            self.screen.blit(c.image, c.rect)
 
         self._draw_ground()
         self._draw_slots()
@@ -121,14 +161,17 @@ class Game:
         self._draw_hover_tooltip()
         self._draw_drag_seed()
         self._draw_hud()
+        if self.paused:
+            self._draw_pause_window()
         pygame.display.flip()
 
     def _draw_hud(self):
         hints = [
-            "Arrow keys: move cloud",
+            "Arrow keys / WASD: move clouds",
             "Click cloud: toggle rain",
             "Drag or click seed to plant",
             "Click harvestable plant",
+            "P: pause",
             "ESC: quit",
         ]
         y = 8
@@ -152,14 +195,14 @@ class Game:
         return slots
 
     def _update_plants(self):
-        raining = self.cloud.raining
-        sun_clear = not self.cloud.covers_sun(self.sun.circle_rect)
+        sun_clear = not any(c.covers_sun(self.sun.circle_rect) for c in self.clouds)
         dt = self.clock.get_time() / 1000.0
         for slot in self.slots:
-            cloud_over_slot = self.cloud.rect.left <= slot.rect.centerx <= self.cloud.rect.right
+            cloud_over_slot = any(c.rect.left <= slot.rect.centerx <= c.rect.right for c in self.clouds)
+            raining_over_slot = any(c.raining and c.rect.left <= slot.rect.centerx <= c.rect.right for c in self.clouds)
             water_delta = -WATER_LOSS
             sun_delta = -SUN_LOSS
-            if raining and cloud_over_slot:
+            if raining_over_slot:
                 water_delta += WATER_GAIN_RAIN
             if sun_clear and not cloud_over_slot:
                 sun_delta += SUN_GAIN_CLEAR
@@ -179,15 +222,16 @@ class Game:
         pygame.draw.rect(self.screen, GROUND_COLOR, self._ground_rect)
 
     def _draw_shadow(self):
-        shadow_width = int(self.cloud.rect.width * 1.15)
-        shadow_height = int(self._ground_height * 0.75)
-        shadow_x = self.cloud.rect.centerx - shadow_width // 2
-        shadow_y = self._ground_rect.top + (self._ground_height - shadow_height) // 2
-        shadow_x = max(0, min(shadow_x, self._field_rect.width - shadow_width))
+        for c in self.clouds:
+            shadow_width = int(c.rect.width * 1.15)
+            shadow_height = int(self._ground_height * 0.75)
+            shadow_x = c.rect.centerx - shadow_width // 2
+            shadow_y = self._ground_rect.top + (self._ground_height - shadow_height) // 2
+            shadow_x = max(0, min(shadow_x, self._field_rect.width - shadow_width))
 
-        shadow = pygame.Surface((shadow_width, shadow_height), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow, (10, 10, 10, 140), shadow.get_rect())
-        self.screen.blit(shadow, (shadow_x, shadow_y))
+            shadow = pygame.Surface((shadow_width, shadow_height), pygame.SRCALPHA)
+            pygame.draw.ellipse(shadow, (10, 10, 10, 140), shadow.get_rect())
+            self.screen.blit(shadow, (shadow_x, shadow_y))
 
     def _draw_slots(self):
         for slot in self.slots:
@@ -322,10 +366,24 @@ class Game:
             label = self._small_font.render(self.drag_seed.name[0], True, (240, 240, 240))
             self.screen.blit(label, (rect.centerx - 4, rect.centery - 8))
 
+    def _draw_pause_window(self):
+        win_w, win_h = 300, 100
+        window = pygame.Rect((SCREEN_W - win_w) //2, (SCREEN_H - win_h) // 2, win_w, win_h)
+        pygame.draw.rect(self.screen, (130, 150, 190), window, 3, border_radius=12)
+        
+        win_font = pygame.font.SysFont("arial", 30)
+        paused_text = win_font.render("Paused", True, (240, 240, 250))
+        helper_text = win_font.render("Press p to resume", True, (180, 240, 250))
+        self.screen.blit(paused_text, paused_text.get_rect(center=(window.centerx, window.centery - 15)))
+        self.screen.blit(helper_text, helper_text.get_rect(center=(window.centerx, window.centery + 15)))        
+        return
+
     def _handle_farm_event(self, event: pygame.event.Event):
         if event.type == pygame.MOUSEMOTION:
             self._hover_slot = self._slot_at_pos(event.pos)
             return
+        
+        if self.paused: return
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             seed = self._seed_at_pos(event.pos)
@@ -398,6 +456,8 @@ class Game:
 
     def _load_plant_phases(self):
         for seed in self.seeds:
+            w = seed.sprite_w if seed.sprite_w is not None else PLANT_SPRITE_W
+            h = seed.sprite_h if seed.sprite_h is not None else PLANT_SPRITE_H
             for filename in seed.phase_filenames:
                 if filename in self._plant_phase_icons:
                     continue
@@ -405,7 +465,7 @@ class Game:
                 if not os.path.exists(path):
                     continue
                 raw = pygame.image.load(path).convert_alpha()
-                self._plant_phase_icons[filename] = pygame.transform.smoothscale(raw, (PLANT_SPRITE_W, PLANT_SPRITE_H))
+                self._plant_phase_icons[filename] = pygame.transform.smoothscale(raw, (w, h))
 
     def _phase_image_for_slot(self, slot: PlantSlot) -> pygame.Surface | None:
         if not slot.seed:
@@ -435,8 +495,12 @@ class Game:
         if not slot.seed:
             return
         name = slot.seed.product_name
-        self.inventory[name] = self.inventory.get(name, 0) + 1
-        slot.clear()
+        self.inventory[name] = self.inventory.get(name, 0) + slot.seed.harvest_yield
+        if slot.seed.regrow_to_stage is None:
+            slot.clear()
+        else:
+            slot.seed.seconds_per_stage = 12.0
+            slot.regrow(slot.seed.regrow_to_stage)
 
     def _sell_inventory(self):
         total = 0

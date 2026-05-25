@@ -14,12 +14,29 @@ SUN_Y        = 100
 SUN_RADIUS   = 55
 SUN_COLOR    = (255, 220, 50)
 
+# ─── Moon ──────────────────────────────────────────────────────────────────────
+MOON_X        = 520
+MOON_Y        = 100
+MOON_RADIUS   = 55
+MOON_COLOR    = (235, 230, 200)
+BITE_OFFSET_X = 18
+BITE_OFFSET_Y = -6
+BITE_RADIUS_RATIO = 0.85 #relative to MOON_RADIUS
+
+# ─── Stars ──────────────────────────────────────────────────────────────────────
+STAR_COLOR        = (240, 240, 220)
+STAR_COUNT        = 60
+SPARKLING_SPEED     = 2 #rad/sec
+
 # ─── Cloud ────────────────────────────────────────────────────────────────────
-CLOUD_START_X    = 200
-CLOUD_START_Y    = 120
+CLOUD_START_X    = 700
+CLOUD_START_Y    = 150
+CLOUD2_START_X   = 200
+CLOUD2_START_Y   = 120
 CLOUD_SPEED      = 4          # pixels per frame when arrow key held
 CLOUD_USE_IMAGE  = True       # set False to fall back to drawn cloud
-
+WIND_SPEED       = 0.4        # wind moves clouds even when player isn't pressing any keys
+                              # WIND_SPEED is a delta of num of pixels per frame
 # ─── Rain ─────────────────────────────────────────────────────────────────────
 RAIN_COLOR       = (130, 170, 220)
 RAIN_DROP_COUNT  = 200

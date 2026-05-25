@@ -56,12 +56,21 @@ python main.py
 3. (Optional) Add its item price to `items.py` if it produces a new product.
 4. Drop any new sprites into `props/` and list them in `props/README.md`.
 
+## Customizing a plant
+use following optional class attributes for your PlantType subclass
+- harvest_yield — num of items produced per harvest (default is 1)
+- regrow_to_stage — if set, plant resets to this stage after harvest instead of being cleared. Useful for re-fruiting plants (default is None)
+- sprite_w, sprite_h — custom sprite width, height in px (default is None, falls back to `PLANT_SPRITE_W`/`PLANT_SPRITE_H` from settings.py)
+
+
 ## Controls
-- Arrow keys: move cloud
+- Arrow keys: move first cloud
+- WASD: move second cloud
 - Click cloud: toggle rain
 - Drag or click seed to plant
 - Click harvestable plant to collect
 - Click dead plant to clear
+- P: pause / resume (animations keep playing)
 - ESC: quit
 
 ## Project structure
@@ -73,6 +82,8 @@ pass_the_game/
 ├── game.py          # Game class – main loop, update, draw
 ├── cloud.py         # Cloud sprite + RainDrop helper
 ├── sun.py           # Sun sprite
+├── moon.py          # Moon sprite (appears at night)
+├── stars.py         # Sparkling stars (appear at night)
 ├── farming.py       # PlantSlot state + rendering helpers
 ├── plants.py        # Plant type definitions (stats + sprite names)
 ├── items.py         # Item registry and sell prices
@@ -98,6 +109,9 @@ Add your name and 1–2 lines about what you added below.
 
 - **Minh**  
   Added farming: buying/planting seeds, keep plant alive with rain and sun, sell products for profit.
+
+- **Danel**
+  Added night (transition to moon and stars), second cloud (WASD keys), "wind", pausing, apple tree that regrows to previous phase after harvesting apples
 
 ---
 
