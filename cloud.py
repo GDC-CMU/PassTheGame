@@ -2,14 +2,21 @@ import pygame
 import random
 import os
 from settings import (
-    CLOUD_START_X, CLOUD_START_Y, CLOUD_SPEED,
+    CLOUD_START_X, CLOUD_START_Y, CLOUD_SPEED, WIND_SPEED,
     CLOUD_USE_IMAGE, SCREEN_W, SCREEN_H,
     RAIN_COLOR, RAIN_DROP_COUNT, RAIN_SPEED_MIN,
-    RAIN_SPEED_MAX, RAIN_LENGTH,
+    RAIN_SPEED_MAX, RAIN_LENGTH, UI_PANEL_W,
 )
 
 PROPS_DIR = os.path.join(os.path.dirname(__file__), "props")
 
+# default controls for the first cloud
+DEFAULT_CONTROLS = {
+    "left": pygame.K_LEFT,
+    "right": pygame.K_RIGHT,
+    "up": pygame.K_UP,
+    "down": pygame.K_DOWN,
+}
 
 class RainDrop:
     """A single falling raindrop that originates below the cloud."""
@@ -42,17 +49,20 @@ class Cloud(pygame.sprite.Sprite):
 
     Controls
     --------
-    Arrow keys  – move cloud
+    Arrow keys/WASD  – move cloud
     Click       – toggle rain on / off
     """
 
     WIDTH  = 160
     HEIGHT = 80
 
-    def __init__(self):
+    def __init__(self, start_pos=(CLOUD_START_X, CLOUD_START_Y), controls=None):
         super().__init__()
         self.raining = False
         self.raindrops: list[RainDrop] = []
+        
+        self.controls = controls or DEFAULT_CONTROLS
+        self.X_float = float(start_pos[0]) #if wind_speed isn't int
 
         # ── try to load prop image ────────────────────────────────────────────
         img_path = os.path.join(PROPS_DIR, "cloud.png")
@@ -62,7 +72,7 @@ class Cloud(pygame.sprite.Sprite):
         else:
             self.image = self._draw_cloud_surface()
 
-        self.rect = self.image.get_rect(topleft=(CLOUD_START_X, CLOUD_START_Y))
+        self.rect = self.image.get_rect(topleft=start_pos)
 
     # ── fallback drawn cloud ───────────────────────────────────────────────────
     @staticmethod
@@ -84,10 +94,14 @@ class Cloud(pygame.sprite.Sprite):
                 self._toggle_rain()
 
     def update(self):
-        self._handle_movement()
         if self.raining:
             for drop in self.raindrops:
                 drop.update(self.rect)
+    
+    def update_movement(self):
+        #called when game isn't paused
+        self._handle_movement()
+        self._apply_wind()
 
     def draw_rain(self, surface: pygame.Surface):
         if self.raining:
@@ -108,16 +122,28 @@ class Cloud(pygame.sprite.Sprite):
     def _handle_movement(self):
         keys = pygame.key.get_pressed()
         dx = dy = 0
-        if keys[pygame.K_LEFT]:  dx -= CLOUD_SPEED
-        if keys[pygame.K_RIGHT]: dx += CLOUD_SPEED
-        if keys[pygame.K_UP]:    dy -= CLOUD_SPEED
-        if keys[pygame.K_DOWN]:  dy += CLOUD_SPEED
+        if keys[self.controls["left"]]:  dx -= CLOUD_SPEED
+        if keys[self.controls["right"]]: dx += CLOUD_SPEED
+        if keys[self.controls["up"]]:    dy -= CLOUD_SPEED
+        if keys[self.controls["down"]]:  dy += CLOUD_SPEED
 
-        self.rect.x = max(0, min(self.rect.x + dx, SCREEN_W - self.rect.width))
+        self.rect.x = max(0, min(self.rect.x + dx, SCREEN_W - UI_PANEL_W - self.rect.width))
         self.rect.y = max(0, min(self.rect.y + dy, SCREEN_H - self.rect.height))
+        if dx:
+            self.X_float = float(self.rect.x)
 
         # keep raindrops tethered to the cloud when it moves
         if self.raining and (dx or dy):
             for drop in self.raindrops:
                 drop.x += dx
                 drop.y += dy
+
+    def _apply_wind(self):
+        old_x = self.rect.x
+        self.X_float = max(0.0, min(self.X_float + WIND_SPEED, float(SCREEN_W - UI_PANEL_W - self.rect.width)))
+        self.rect.x = int(self.X_float)
+        dx = self.rect.x - old_x
+
+        if self.raining and dx:
+            for drop in self.raindrops:
+                drop.x += dx

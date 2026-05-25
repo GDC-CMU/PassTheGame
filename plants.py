@@ -33,6 +33,10 @@ class PlantType(ABC):
     base_color: tuple[int, int, int]
     icon_filename: str
     phase_filenames: list[str]
+    harvest_yield: int = 1
+    regrow_to_stage: int | None = None
+    sprite_w: int | None = None
+    sprite_h: int | None = None
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -94,3 +98,27 @@ class Tomato(PlantType):
         "tomato_phase3.png",
         "tomato_phase4.png",
     ]
+
+
+class Apple(PlantType):
+    name = "Apple"
+    cost = 20
+    product_name = "Apple"
+    growth_stages = 4
+    seconds_per_stage = 6.0
+    water_min = 35.0
+    water_max = 80.0
+    sun_min = 40.0
+    sun_max = 85.0
+    base_color = (200, 60, 60)
+    icon_filename = "apple_icon.png"
+    phase_filenames = [
+        "apple_phase1.png",
+        "apple_phase2.png",
+        "apple_phase3.png",
+        "apple_phase4.png",
+    ]
+    harvest_yield = 20 #collect 20 apples per harvest
+    regrow_to_stage = 3 #tree will go back to stage 3 after harvest
+    sprite_w = 170
+    sprite_h = 280 # since apple trees are taller than carrots!
