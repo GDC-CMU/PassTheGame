@@ -27,6 +27,15 @@ otherwise it falls back to the built-in drawn versions.
 | apple_phase2.png | game.py | 170 × 280 px    | Plant growth phase 2               |
 | apple_phase3.png | game.py | 170 × 280 px    | Plant growth phase 3 (no fruit)    |
 | apple_phase4.png | game.py | 170 × 280 px    | Plant growth phase 4 (with fruit)  |
+| storm_titan.png | storm_titan.py | 260 × 130 px | Storm Titan boss sprite (optional; falls back to drawn) |
+| cyclone_titan.png | cyclone_titan.py | 340 × 180 px | Cyclone Titan boss sprite (optional; falls back to drawn) |
+| storm_seed_icon.png | plants.py | 64 × 64 px | Seed icon for the Storm Seed (special boss drop) |
+| storm_seed_phase1.png | plants.py | 64 × 96 px | Storm Seed growth phase 1 (special boss plant) |
+| storm_seed_phase2.png | plants.py | 64 × 96 px | Storm Seed growth phase 2 (special boss plant) |
+| storm_seed_phase3.png | plants.py | 64 × 96 px | Storm Seed growth phase 3 (special boss plant) |
+| storm_seed_phase4.png | plants.py | 64 × 96 px | Storm Seed growth phase 4 (special boss plant) |
+| squirrel.png | critters.py | 56 × 28 px | Chipmunk thief sprite (optional; auto-scaled) |
+| snake.png | critters.py | 70 × 18 px | Snake thief sprite (optional; auto-scaled) |
 
 All images should be **PNG with an alpha channel** so transparency works
 correctly against the sky background.

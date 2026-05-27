@@ -72,6 +72,28 @@ use following optional class attributes for your PlantType subclass
 - Click dead plant to clear
 - P: pause / resume (animations keep playing)
 - ESC: quit
+- B: (cheat) toggle Storm Titan spawn / despawn
+- C: (cheat) toggle Cyclone Titan spawn / despawn
+- V: (cheat) force-spawn the chipmunk thief
+- N: (cheat) force-spawn the snake thief
+- Click a critter: scare it away
+
+## Boss fights + critters
+
+### Storm Titan
+- Spawns **twice per in-game week** (cadence is tunable in `settings.py`).
+- Targets a planted slot, shows a warning, then strikes lightning.
+- **Block the strike** by moving any cloud to cover the target x-position. If blocked, the lightning reflects and damages the boss (**5 hits** defeats it).
+- On defeat it lingers briefly, then leaves, and drops a **Storm Seed** (plantable reward).
+
+### Cyclone Titan
+- Spawns **once per in-game week**.
+- Bigger boss with a bigger health bar.
+- Unblocked strikes one-shot plants and also hit nearby slots (AoE).
+
+### Plant thieves (critters)
+- Chipmunk thief + snake thief can spawn from either side and try to eat a planted slot (then the plant is removed).
+- Clicking a thief scares it into fleeing off-screen.
 
 ## Project structure
 
@@ -112,6 +134,9 @@ Add your name and 1–2 lines about what you added below.
 
 - **Danel**
   Added night (transition to moon and stars), second cloud (WASD keys), "wind", pausing, apple tree that regrows to previous phase after harvesting apples
+
+- **Yousef**
+  Added Storm Titan + Cyclone Titan boss fights (timed spawns, health bars, blockable lightning) + chipmunk/snake plant-thief critters. Cheat keys: **B/C** toggle bosses, **V/N** spawn critters. Art needed for the special boss plant: `storm_seed_icon.png` + `storm_seed_phase1.png`–`storm_seed_phase4.png`.
 
 ---
 
