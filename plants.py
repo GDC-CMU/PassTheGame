@@ -37,6 +37,7 @@ class PlantType(ABC):
     regrow_to_stage: int | None = None
     sprite_w: int | None = None
     sprite_h: int | None = None
+    seed_item_name: str | None = None
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -122,3 +123,126 @@ class Apple(PlantType):
     regrow_to_stage = 3 #tree will go back to stage 3 after harvest
     sprite_w = 170
     sprite_h = 280 # since apple trees are taller than carrots!
+
+
+class StormSeed(PlantType):
+    """Rare seed dropped by the Storm Titan.
+
+    This seed is planted by consuming an inventory item (seed_item_name) rather
+    than spending money.
+    """
+
+    name = "Storm Seed"
+    cost = 0
+    seed_item_name = "Storm Seed"
+    product_name = "Storm Crystal"
+    growth_stages = 4
+    seconds_per_stage = 5.5
+    water_min = 40.0
+    water_max = 85.0
+    sun_min = 15.0
+    sun_max = 65.0
+    base_color = (170, 120, 220)
+    icon_filename = "storm_seed_icon.png"
+    phase_filenames = [
+        "storm_seed_phase1.png",
+        "storm_seed_phase2.png",
+        "storm_seed_phase3.png",
+        "storm_seed_phase4.png",
+    ]
+
+
+class Mushroom(PlantType):
+    name = "Mushroom"
+    cost = 3
+    product_name = "Mushroom"
+    growth_stages = 2
+    seconds_per_stage = 6.0
+    water_min = 60.0
+    water_max = 95.0
+    sun_min = 0.0
+    sun_max = 40.0
+    base_color = (180, 140, 120)
+    icon_filename = "mushroom_icon.png"
+    phase_filenames = [
+        "mushroom_phase1.png",
+        "mushroom_phase2.png",
+    ]
+
+
+class Cactus(PlantType):
+    name = "Cactus"
+    cost = 6
+    product_name = "Cactus Fruit"
+    growth_stages = 3
+    seconds_per_stage = 5.5
+    water_min = 10.0
+    water_max = 50.0
+    sun_min = 60.0
+    sun_max = 100.0
+    base_color = (120, 200, 100)
+    icon_filename = "cactus_icon.png"
+    phase_filenames = [
+        "cactus_phase1.png",
+        "cactus_phase2.png",
+        "cactus_phase3.png",
+    ]
+
+
+class Rice(PlantType):
+    name = "Rice"
+    cost = 4
+    product_name = "Rice"
+    growth_stages = 3
+    seconds_per_stage = 4.0
+    water_min = 70.0
+    water_max = 100.0
+    sun_min = 30.0
+    sun_max = 80.0
+    base_color = (220, 200, 120)
+    icon_filename = "rice_icon.png"
+    phase_filenames = [
+        "rice_phase1.png",
+        "rice_phase2.png",
+        "rice_phase3.png",
+    ]
+
+
+class NightBloom(PlantType):
+    name = "Night Bloom"
+    cost = 12
+    product_name = "Night Bloom"
+    growth_stages = 4
+    seconds_per_stage = 6.0
+    water_min = 40.0
+    water_max = 80.0
+    sun_min = 0.0
+    sun_max = 30.0
+    base_color = (90, 40, 160)
+    icon_filename = "nightbloom_icon.png"
+    phase_filenames = [
+        "nightbloom_phase1.png",
+        "nightbloom_phase2.png",
+        "nightbloom_phase3.png",
+        "nightbloom_phase4.png",
+    ]
+
+
+class Pumpkin(PlantType):
+    name = "Pumpkin"
+    cost = 10
+    product_name = "Pumpkin"
+    growth_stages = 4
+    seconds_per_stage = 6.5
+    water_min = 50.0
+    water_max = 85.0
+    sun_min = 45.0
+    sun_max = 90.0
+    base_color = (220, 130, 60)
+    icon_filename = "pumpkin_icon.png"
+    phase_filenames = [
+        "pumpkin_phase1.png",
+        "pumpkin_phase2.png",
+        "pumpkin_phase3.png",
+        "pumpkin_phase4.png",
+    ]
