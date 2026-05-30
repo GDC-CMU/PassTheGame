@@ -28,6 +28,7 @@ from settings import (
     LIGHTNING_ROD_COST, LIGHTNING_ROD_CHARGES,
 )
 from cloud import Cloud
+import audio
 from sun import Sun
 from moon import Moon
 from stars import Stars
@@ -156,6 +157,11 @@ class Game:
         self._load_tool_icons()
         self._load_plant_phases()
         self._load_dead_plant()
+        # Initialize optional SFX loader (safe if files are missing)
+        try:
+            audio.init(PROPS_DIR)
+        except Exception:
+            pass
 
     # ── main loop ─────────────────────────────────────────────────────────────
     def run(self):
@@ -1127,6 +1133,11 @@ class Game:
             return
         name = slot.seed.product_name
         self.inventory[name] = self.inventory.get(name, 0) + slot.seed.harvest_yield
+        try:
+            import audio as _audio
+            _audio.play("harvest")
+        except Exception:
+            pass
         if slot.seed.regrow_to_stage is None:
             slot.clear()
         else:
