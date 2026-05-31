@@ -4,16 +4,16 @@ This is a collaborative game dev experiment where one game gets passed around an
 
 ## How it works
 
-1. Clone or pull the repository  
-2. Create a new branch for your changes (call it your name)  
-3. Do your thing  
+1. Clone or pull the repository
+2. Create a new branch for your changes (call it your name)
+3. Do your thing
    - Add a feature (can range from something very simple to some enormous 2GBs of code)
-   - Improve something  
-   - Break something and fix it better  
-   - Be creative  
-4. Push your branch  
-5. Open a pull request  
-6. Once it is approved, it gets merged into the main game  
+   - Improve something
+   - Break something and fix it better
+   - Be creative
+4. Push your branch
+5. Open a pull request
+6. Once it is approved, it gets merged into the main game
 7. Pull again later and see how the game has changed  (optional)
 
 That is it. Keep it fun and keep it moving.
@@ -22,11 +22,11 @@ For the practical "how do I actually open a PR" details, see [CONTRIBUTING.md](C
 
 ## Rules and guidelines
 
-- Keep your changes reasonable so others can build on them  
+- Keep your changes reasonable so others can build on them
 - Write comments as if you are talking to the next person
-- Make sure the game still runs  
-- Do not overwrite someone else's work unless you are improving it  
-- Have fun with it  
+- Make sure the game still runs
+- Do not overwrite someone else's work unless you are improving it
+- Have fun with it
 - Make a before-after video of how you evolved the game (*Completely optional, for fun purposes only*)
 
 ## Tech
@@ -126,10 +126,10 @@ and register them in `game.py`.
 
 Add your name and 1–2 lines about what you added below.
 
-- **Nancy**  
+- **Nancy**
   Created the base game: blue sky, a movable cloud, rain on click, and a sun that darkens the sky when covered.
 
-- **Minh**  
+- **Minh**
   Added farming: buying/planting seeds, keep plant alive with rain and sun, sell products for profit.
 
 - **Danel**
@@ -139,6 +139,12 @@ Add your name and 1–2 lines about what you added below.
   Added Storm Titan + Cyclone Titan boss fights and chipmunk/snake plant-thief critters, including blocking and perfect-block combat behavior.
   Expanded progression systems with seasons, weather, market modifiers, and tools (`Compost`, `Scarecrow`, `Lightning Rod`) plus drop/reward items.
   Added five new crops (`Mushroom`, `Cactus`, `Rice`, `Night Bloom`, `Pumpkin`) and polished HUD/UX flow (market info, boss timers, sell confirmation).
+
+- **Mohamed**
+  Made a main menu.
+  Made a tutorial for the basic mechanics.
+  Made the game fullscreen. Future devs you might want to make it manually resizable for more flexibility but if not this is good enough and better than the previously tiny window.
+  Future devs, please add sounds!!!
 
 ---
 
