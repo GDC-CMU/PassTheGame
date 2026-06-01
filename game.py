@@ -59,7 +59,7 @@ class Game:
     """
 
     def __init__(self):
-        self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+        self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), pygame.SCALED | pygame.FULLSCREEN)
         pygame.display.set_caption(TITLE)
         self.clock  = pygame.time.Clock()
         self.paused = False
@@ -93,7 +93,7 @@ class Game:
         self.cyclone_titan = CycloneTitan()
         # Priority order when multiple bosses are ready to spawn.
         self._bosses = [self.cyclone_titan, self.storm_titan]
-        
+
         #controls for cloud2
         WASD = {
             "left": pygame.K_a,
@@ -207,7 +207,7 @@ class Game:
         #derive darkness level (uses red)
         denominator = max(1, SKY_DAY[0] - SKY_DARK[0])
         self._darkness = max(0.0, min(1.0, (SKY_DAY[0] - self._sky_color[0])/denominator ))
-        
+
         if not self.paused:
             self._update_world_time(dt)
             self._update_weather(dt)
@@ -323,7 +323,7 @@ class Game:
 
         self.storm_titan.draw_body(self.screen)
         self.cyclone_titan.draw_body(self.screen)
-        
+
         for c in self.clouds:
             c.draw_rain(self.screen)
             self.screen.blit(c.image, c.rect)
@@ -352,14 +352,7 @@ class Game:
         pygame.display.flip()
 
     def _draw_hud(self):
-        hints = [
-            "Arrow keys / WASD: move clouds",
-            "Click cloud: rain Off/Light/Heavy",
-            "Drag or click seed to plant",
-            "Click harvestable plant",
-            "P: pause",
-            "ESC: quit",
-        ]
+        hints = []
 
         day_in_week = (self._day_index % int(IN_GAME_DAYS_PER_WEEK)) + 1
         week = self._week_index + 1
@@ -867,12 +860,12 @@ class Game:
         win_w, win_h = 300, 100
         window = pygame.Rect((SCREEN_W - win_w) //2, (SCREEN_H - win_h) // 2, win_w, win_h)
         pygame.draw.rect(self.screen, (130, 150, 190), window, 3, border_radius=12)
-        
+
         win_font = pygame.font.SysFont("arial", 30)
         paused_text = win_font.render("Paused", True, (240, 240, 250))
         helper_text = win_font.render("Press p to resume", True, (180, 240, 250))
         self.screen.blit(paused_text, paused_text.get_rect(center=(window.centerx, window.centery - 15)))
-        self.screen.blit(helper_text, helper_text.get_rect(center=(window.centerx, window.centery + 15)))        
+        self.screen.blit(helper_text, helper_text.get_rect(center=(window.centerx, window.centery + 15)))
         return
 
     def _handle_farm_event(self, event: pygame.event.Event):
@@ -897,7 +890,7 @@ class Game:
         if event.type == pygame.MOUSEMOTION:
             self._hover_slot = self._slot_at_pos(event.pos)
             return
-        
+
         if self.paused:
             return
 
