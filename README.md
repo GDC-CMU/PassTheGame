@@ -146,6 +146,10 @@ Add your name and 1–2 lines about what you added below.
   Made the game fullscreen. Future devs you might want to make it manually resizable for more flexibility but if not this is good enough and better than the previously tiny window.
   Future devs, please add sounds!!!
 
+- **Noor**
+  Added a 'Quit' button to main menu.
+  Edited the pause UI.
+
 ---
 
 Let's see how wild this game becomes 👀
