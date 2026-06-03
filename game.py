@@ -157,6 +157,10 @@ class Game:
         self._load_plant_phases()
         self._load_dead_plant()
 
+        #  ── pause menu buttons ────────────────────────────────────────────────
+        self._pause_resume_btn = pygame.Rect(SCREEN_W // 2 - 100, SCREEN_H // 2 - 15, 200, 45)
+        self._pause_quit_btn = pygame.Rect(SCREEN_W // 2 - 100, SCREEN_H // 2 + 35, 200, 45)
+
     # ── main loop ─────────────────────────────────────────────────────────────
     def run(self):
         running = True
@@ -184,6 +188,12 @@ class Game:
                 if not self.paused:
                     for c in self.clouds:
                         c.handle_event(event)
+                if self.paused:
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        if self._pause_resume_btn.collidepoint(event.pos):
+                            self.paused = False
+                        if self._pause_quit_btn.collidepoint(event.pos):
+                            running = False
                 self._handle_farm_event(event)
 
             self._update()
@@ -857,15 +867,27 @@ class Game:
             self.screen.blit(label, (rect.centerx - 4, rect.centery - 8))
 
     def _draw_pause_window(self):
-        win_w, win_h = 300, 100
-        window = pygame.Rect((SCREEN_W - win_w) //2, (SCREEN_H - win_h) // 2, win_w, win_h)
-        pygame.draw.rect(self.screen, (130, 150, 190), window, 3, border_radius=12)
+        overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 170))
+        self.screen.blit(overlay, (0, 0))
+
+        win_w, win_h = 300, 200
+        window = pygame.Rect((SCREEN_W - win_w) // 2, (SCREEN_H - win_h) // 2, win_w, win_h)
+        pygame.draw.rect(self.screen, (130, 150, 190), window, border_radius=12)
 
         win_font = pygame.font.SysFont("arial", 30)
-        paused_text = win_font.render("Paused", True, (240, 240, 250))
-        helper_text = win_font.render("Press p to resume", True, (180, 240, 250))
-        self.screen.blit(paused_text, paused_text.get_rect(center=(window.centerx, window.centery - 15)))
-        self.screen.blit(helper_text, helper_text.get_rect(center=(window.centerx, window.centery + 15)))
+        btn_font = pygame.font.SysFont("arial", 24)
+        paused_text = win_font.render("Paused", True, (255, 255, 255))
+        resume_text = btn_font.render("Resume", True, (255, 255, 255))
+        quit_text = btn_font.render("Quit", True, (255, 255, 255))
+
+        pygame.draw.rect(self.screen, (70, 110, 150), self._pause_resume_btn, border_radius=6)
+        pygame.draw.rect(self.screen, (70, 110, 150), self._pause_quit_btn, border_radius=6)
+
+        self.screen.blit(paused_text, paused_text.get_rect(center=(window.centerx, window.centery - 55)))
+        self.screen.blit(resume_text, resume_text.get_rect(center=self._pause_resume_btn.center))
+        self.screen.blit(quit_text, quit_text.get_rect(center=self._pause_quit_btn.center))
+
         return
 
     def _handle_farm_event(self, event: pygame.event.Event):
