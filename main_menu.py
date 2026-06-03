@@ -13,9 +13,11 @@ class MainMenu:
         center_x = SCREEN_W // 2
         start_y = SCREEN_H // 2
         tut_y = SCREEN_H // 2 + 80
+        exit_y = SCREEN_H // 2 + 160
 
         self.btn_start = pygame.Rect(center_x - btn_w // 2, start_y, btn_w, btn_h)
         self.btn_tut = pygame.Rect(center_x - btn_w // 2, tut_y, btn_w, btn_h)
+        self.btn_exit = pygame.Rect(center_x - btn_w // 2, exit_y, btn_w, btn_h)
 
     def run(self):
         running = True
@@ -29,6 +31,8 @@ class MainMenu:
                         return "start"
                     if self.btn_tut.collidepoint(event.pos):
                         return "tutorial"
+                    if self.btn_exit.collidepoint(event.pos):
+                        return "quit"
 
             # Fill sky color
             self.screen.fill(SKY_DAY)
@@ -43,6 +47,7 @@ class MainMenu:
             # Draw Buttons
             self._draw_button(self.btn_start, "Start Game")
             self._draw_button(self.btn_tut, "Tutorial")
+            self._draw_button(self.btn_exit, "Quit")
 
             pygame.display.flip()
 
