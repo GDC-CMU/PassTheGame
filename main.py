@@ -20,8 +20,8 @@ def main():
             tutorial = Tutorial(screen)
             state = tutorial.run()
 
-        elif state == "start":
-            game = Game()
+        elif state in ("new_game", "continue"):
+            game = Game(new_game=(state == "new_game"))
             game.screen = screen
             game.run()
             state = "menu"

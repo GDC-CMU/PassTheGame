@@ -1,5 +1,7 @@
+import os
 import pygame
 from settings import SCREEN_W, SCREEN_H, TITLE, FPS, SKY_DAY
+from game import SAVE_PATH
 
 class MainMenu:
     def __init__(self, screen):
@@ -8,31 +10,37 @@ class MainMenu:
         self.font_title = pygame.font.SysFont("arial", 64, bold=True)
         self.font_button = pygame.font.SysFont("arial", 32)
 
-        # Button dimensions and positions
-        btn_w, btn_h = 240, 60
-        center_x = SCREEN_W // 2
-        start_y = SCREEN_H // 2
-        tut_y = SCREEN_H // 2 + 80
-        exit_y = SCREEN_H // 2 + 160
+        # Offer "Continue" only when there is a save to continue from.
+        has_save = os.path.exists(SAVE_PATH)
+        entries = []
+        if has_save:
+            entries.append(("Continue", "continue"))
+        entries.append(("New Game", "new_game"))
+        entries.append(("Tutorial", "tutorial"))
+        entries.append(("Quit", "quit"))
 
-        self.btn_start = pygame.Rect(center_x - btn_w // 2, start_y, btn_w, btn_h)
-        self.btn_tut = pygame.Rect(center_x - btn_w // 2, tut_y, btn_w, btn_h)
-        self.btn_exit = pygame.Rect(center_x - btn_w // 2, exit_y, btn_w, btn_h)
+        btn_w, btn_h = 240, 60
+        gap = 20
+        center_x = SCREEN_W // 2
+        # Anchor the buttons well below the title (top-aligned) so the list
+        # doesn't crowd the title when there are more entries (e.g. Continue).
+        start_y = int(SCREEN_H * 0.42)
+
+        self.buttons = []
+        for i, (label, state) in enumerate(entries):
+            rect = pygame.Rect(center_x - btn_w // 2, start_y + i * (btn_h + gap), btn_w, btn_h)
+            self.buttons.append((rect, label, state))
 
     def run(self):
-        running = True
-        while running:
+        while True:
             self.clock.tick(FPS)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return "quit"
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if self.btn_start.collidepoint(event.pos):
-                        return "start"
-                    if self.btn_tut.collidepoint(event.pos):
-                        return "tutorial"
-                    if self.btn_exit.collidepoint(event.pos):
-                        return "quit"
+                    for rect, _label, state in self.buttons:
+                        if rect.collidepoint(event.pos):
+                            return state
 
             # Fill sky color
             self.screen.fill(SKY_DAY)
@@ -40,16 +48,16 @@ class MainMenu:
             # Draw Title
             title_surf = self.font_title.render(TITLE, True, (255, 255, 255))
             title_shadow = self.font_title.render(TITLE, True, (50, 50, 50))
-            t_rect = title_surf.get_rect(center=(SCREEN_W // 2, SCREEN_H // 3))
+            t_rect = title_surf.get_rect(center=(SCREEN_W // 2, SCREEN_H // 4))
             self.screen.blit(title_shadow, (t_rect.x + 4, t_rect.y + 4))
             self.screen.blit(title_surf, t_rect)
 
             # Draw Buttons
-            self._draw_button(self.btn_start, "Start Game")
-            self._draw_button(self.btn_tut, "Tutorial")
-            self._draw_button(self.btn_exit, "Quit")
+            for rect, label, _state in self.buttons:
+                self._draw_button(rect, label)
 
             pygame.display.flip()
+
 
     def _draw_button(self, rect, text):
         mouse_pos = pygame.mouse.get_pos()

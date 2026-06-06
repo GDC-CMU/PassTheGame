@@ -19,6 +19,7 @@ from settings import (
     SNAKE_SPEED_PX_PER_SEC,
     SNAKE_EAT_SECONDS,
     SNAKE_IMAGE_FILENAME,
+    CRITTER_SCARECROW_AVOID_RADIUS_SLOTS,
 )
 from settings import (
     CHIPMUNK_DROP_ITEM_NAME,
@@ -207,12 +208,35 @@ class PlantThief:
         self.rect.bottom = old_bottom
         self.rect.x = int(round(self._x))
 
+    def _scarecrow_protects(self, slots: list[object], idx: int) -> bool:
+        """True if slot ``idx`` is within the scare radius of any scarecrow."""
+        target = slots[idx]
+        trect = getattr(target, "rect", None)
+        if not isinstance(trect, pygame.Rect):
+            return False
+        radius = max(0, int(CRITTER_SCARECROW_AVOID_RADIUS_SLOTS))
+        if radius <= 0:
+            return getattr(target, "has_scarecrow", False)
+        pitch = max(trect.width, trect.height) * 1.4
+        reach = radius * pitch
+        for slot in slots:
+            if not getattr(slot, "has_scarecrow", False):
+                continue
+            srect = getattr(slot, "rect", None)
+            if not isinstance(srect, pygame.Rect):
+                continue
+            if abs(srect.centerx - trect.centerx) <= reach and abs(srect.centery - trect.centery) <= reach:
+                return True
+        return False
+
     def _choose_target(self, slots: list[object]) -> None:
         candidates: list[int] = []
         for idx, slot in enumerate(slots):
             if getattr(slot, "seed", None) is None:
                 continue
             if getattr(slot, "dead", False):
+                continue
+            if self._scarecrow_protects(slots, idx):
                 continue
             candidates.append(idx)
         if not candidates:
@@ -232,6 +256,8 @@ class PlantThief:
         if getattr(slot, "seed", None) is None:
             return False
         if getattr(slot, "dead", False):
+            return False
+        if self._scarecrow_protects(slots, self._target_slot_index):
             return False
         rect = getattr(slot, "rect", None)
         return isinstance(rect, pygame.Rect)

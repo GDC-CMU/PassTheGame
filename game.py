@@ -1,9 +1,11 @@
 import os
+import json
+import math
 import random
 import pygame
 from settings import (
     TITLE, SCREEN_W, SCREEN_H, FPS,
-    SKY_DAY, SKY_DARK,
+    SKY_DAY, SKY_DARK, SKY_DRIZZLE,
     UI_PANEL_W, GROUND_HEIGHT_PCT, SLOT_COUNT,
     SLOT_PADDING, SLOT_COLOR, SLOT_BORDER_COLOR,
     GROUND_COLOR,
@@ -21,10 +23,10 @@ from settings import (
     WIND_SPEED,
     WEATHER_EVENT_WEIGHTS, WEATHER_EVENT_DURATION_SECONDS,
     WEATHER_HEATWAVE_WATER_LOSS_MULT, WEATHER_HEATWAVE_SUN_GAIN_MULT,
-    WEATHER_DRIZZLE_WATER_BONUS, WEATHER_DRIZZLE_SUN_GAIN_MULT,
+    WEATHER_DRIZZLE_WATER_BONUS, WEATHER_DRIZZLE_SUN_GAIN_MULT, WEATHER_DRIZZLE_GROWTH_MULT,
     WEATHER_GUSTS_WIND_MULT,
     COMPOST_ITEM_NAME, COMPOST_FROM_DEAD_PLANT, COMPOST_BOOST_SECONDS, COMPOST_GROWTH_MULT,
-    SCARECROW_COST, SCARECROW_RADIUS_SLOTS,
+    SCARECROW_COST, SCARECROW_RADIUS_SLOTS, SCARECROW_DURATION_SECONDS,
     LIGHTNING_ROD_COST, LIGHTNING_ROD_CHARGES,
 )
 from cloud import Cloud
@@ -32,13 +34,20 @@ from sun import Sun
 from moon import Moon
 from stars import Stars
 from farming import PlantSlot
-from plants import PlantType, Carrot, Lettuce, Tomato, Apple, StormSeed
+from plants import (
+    PlantType, Carrot, Lettuce, Tomato, Apple, StormSeed,
+    Mushroom, Cactus, Rice, NightBloom, Pumpkin,
+)
 from items import ITEMS
 from storm_titan import StormTitan
 from cyclone_titan import CycloneTitan
 from critters import make_squirrel, make_snake
 
 PROPS_DIR = os.path.join(os.path.dirname(__file__), "props")
+SAVE_PATH = os.path.join(os.path.dirname(__file__), "savegame.json")
+
+# Real-time seconds between automatic saves.
+AUTOSAVE_INTERVAL_SECONDS = 120.0
 
 # Tool IDs (kept as strings so the UI/event code stays simple)
 TOOL_COMPOST = "compost"
@@ -58,7 +67,7 @@ class Game:
     future contributors can easily add more sprites or layers.
     """
 
-    def __init__(self):
+    def __init__(self, new_game: bool = False):
         self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), pygame.SCALED | pygame.FULLSCREEN)
         pygame.display.set_caption(TITLE)
         self.clock  = pygame.time.Clock()
@@ -126,40 +135,71 @@ class Game:
         self._critters = [self.squirrel, self.snake]
 
         # Add new plants by instantiating PlantType subclasses here.
-        self.seeds: list[PlantType] = [Carrot(), Lettuce(), Tomato(), Apple(), StormSeed()]
+        self.seeds: list[PlantType] = [
+            Carrot(), Lettuce(), Tomato(), Apple(), StormSeed(),
+            Mushroom(), Cactus(), Rice(), NightBloom(), Pumpkin(),
+        ]
         self.money = 20
+        # Cumulative money earned from selling (tracked for stats / migration).
+        self._total_earned = 0
+        # Seeds the player has purchased the right to plant. Seeds with
+        # unlock_at <= 0 are always available; the rest must be bought once.
+        self._unlocked_seeds: set[str] = {
+            type(s).__name__ for s in self.seeds if int(getattr(s, "unlock_at", 0)) <= 0
+        }
         self.inventory: dict[str, int] = {}
         self.items = ITEMS
         self.drag_seed: PlantType | None = None
         self.selected_seed: PlantType | None = None
         self.selected_tool = None
         self._seed_buttons: list[tuple[PlantType, pygame.Rect]] = []
+        self._locked_seed_buttons: list[tuple[PlantType, pygame.Rect]] = []
         self._seed_icons: dict[str, pygame.Surface] = {}
         self._tool_buttons: list[tuple[str, pygame.Rect]] = []
         self._tool_icons: dict[str, pygame.Surface] = {}
+        self._item_icons: dict[str, pygame.Surface] = {}
         self._plant_phase_icons: dict[str, pygame.Surface] = {}
         self._hover_slot: PlantSlot | None = None
         self._sell_button = pygame.Rect(0, 0, 0, 0)
+        self._save_button = pygame.Rect(0, 0, 0, 0)
+        self._save_flash_timer = 0
         self._money_flash_timer = 0
         self._ui_panel_image: pygame.Surface | None = None
         self._coin_icon: pygame.Surface | None = None
+        self._lock_icon: pygame.Surface | None = None
         self._dead_plant_image: pygame.Surface | None = None
         # sell confirmation UI
         self._pending_sell_total: int | None = None
         self._show_sell_confirm: bool = False
         self._sell_confirm_buttons: dict[str, pygame.Rect] = {}
+        # seed-unlock purchase confirmation UI
+        self._pending_purchase: PlantType | None = None
+        self._show_purchase_confirm: bool = False
+        self._purchase_confirm_buttons: dict[str, pygame.Rect] = {}
+        # auto-save every AUTOSAVE_INTERVAL_SECONDS of real time
+        self._autosave_timer: float = 0.0
 
         self.slots = self._create_slots()
         self._load_seed_icons()
         self._load_ui_panel()
         self._load_coin_icon()
+        self._load_lock_icon()
         self._load_tool_icons()
         self._load_plant_phases()
         self._load_dead_plant()
+        self._build_item_icons()
 
-        #  ── pause menu buttons ────────────────────────────────────────────────
+        # ── pause menu buttons ────────────────────────────────────────────────
         self._pause_resume_btn = pygame.Rect(SCREEN_W // 2 - 100, SCREEN_H // 2 - 15, 200, 45)
         self._pause_quit_btn = pygame.Rect(SCREEN_W // 2 - 100, SCREEN_H // 2 + 35, 200, 45)
+
+        # New Game starts from the fresh state set up above and overwrites the
+        # save slot. Continue loads the existing save (creating one if missing).
+        if new_game:
+            self.save_game()
+            self._save_flash_timer = 0
+        else:
+            self.load_game()
 
     # ── main loop ─────────────────────────────────────────────────────────────
     def run(self):
@@ -207,9 +247,23 @@ class Game:
 
         if self._money_flash_timer > 0:
             self._money_flash_timer -= 1
+        if self._save_flash_timer > 0:
+            self._save_flash_timer -= 1
 
-        # lerp sky colour toward target
-        target = SKY_DARK if any(c.covers_sun(self.sun.circle_rect) for c in self.clouds) else SKY_DAY
+        # Periodic autosave (silent, no "Saved!" flash).
+        self._autosave_timer += dt
+        if self._autosave_timer >= AUTOSAVE_INTERVAL_SECONDS:
+            self._autosave_timer = 0.0
+            self.save_game(flash=False)
+
+        # lerp sky colour toward target. A cloud over the sun darkens it most;
+        # otherwise drizzle paints a grayer overcast over the clear-day blue.
+        if any(c.covers_sun(self.sun.circle_rect) for c in self.clouds):
+            target = SKY_DARK
+        elif self._weather_event == "Drizzle":
+            target = SKY_DRIZZLE
+        else:
+            target = SKY_DAY
         for i in range(3):
             diff = target[i] - self._sky_color[i]
             self._sky_color[i] += diff * 0.04   # smooth transition speed
@@ -359,44 +413,84 @@ class Game:
             self._draw_pause_window()
         if self._show_sell_confirm:
             self._draw_sell_confirm()
+        if self._show_purchase_confirm:
+            self._draw_purchase_confirm()
         pygame.display.flip()
 
     def _draw_hud(self):
-        hints = []
+        rows: list[tuple[str, str, tuple[int, int, int]]] = []
 
         day_in_week = (self._day_index % int(IN_GAME_DAYS_PER_WEEK)) + 1
         week = self._week_index + 1
         season = SEASON_NAMES[self._season_index] if SEASON_NAMES else "Season"
-        hints.append(f"Day {day_in_week}/{IN_GAME_DAYS_PER_WEEK}  Week {week}  Season: {season}")
+        rows.append(("day", f"Day {day_in_week}/{IN_GAME_DAYS_PER_WEEK}   Week {week}   {season}", (255, 255, 255)))
 
         if self._market_featured_item and self._market_discounted_item:
-            hot = f"Hot: {self._market_featured_item} x{MARKET_FEATURED_MULT:g}"
-            cold = f"Cold: {self._market_discounted_item} x{MARKET_DISCOUNT_MULT:g}"
-            hints.append(f"Market — {hot}   {cold}")
+            rows.append((
+                "market",
+                f"Hot {self._market_featured_item} x{MARKET_FEATURED_MULT:g}   "
+                f"Cold {self._market_discounted_item} x{MARKET_DISCOUNT_MULT:g}",
+                (235, 220, 160),
+            ))
 
         if self._weather_event != "None":
             remaining = max(0, int(self._weather_remaining) + 1)
-            hints.append(f"Weather: {self._weather_event} ({remaining}s)")
+            rows.append(("weather", f"{self._weather_event}  ({remaining}s)", (200, 225, 255)))
+
         if self.storm_titan.state == StormTitan.STATE_ACTIVE:
-            hints.append(f"Storm Titan HP: {self.storm_titan.hp}/{self.storm_titan.max_hp}")
+            rows.append(("storm", f"Storm Titan HP {self.storm_titan.hp}/{self.storm_titan.max_hp}", (255, 170, 150)))
         elif self.storm_titan.state == StormTitan.STATE_RETREATING:
-            hints.append(f"Storm Titan leaves in: {max(0, int(self.storm_titan.seconds_until_leave) + 1)}s")
+            rows.append(("storm", f"Storm Titan leaves in {max(0, int(self.storm_titan.seconds_until_leave) + 1)}s", (225, 225, 225)))
         else:
-            hints.append(f"Next Storm Titan: {self._format_mmss(self.storm_titan.seconds_until_spawn)}")
+            rows.append(("storm", f"Next Storm Titan {self._format_mmss(self.storm_titan.seconds_until_spawn)}", (210, 210, 210)))
 
         if self.cyclone_titan.state == StormTitan.STATE_ACTIVE:
-            hints.append(f"Cyclone Titan HP: {self.cyclone_titan.hp}/{self.cyclone_titan.max_hp}")
+            rows.append(("cyclone", f"Cyclone Titan HP {self.cyclone_titan.hp}/{self.cyclone_titan.max_hp}", (255, 170, 150)))
         elif self.cyclone_titan.state == StormTitan.STATE_RETREATING:
-            hints.append(f"Cyclone Titan leaves in: {max(0, int(self.cyclone_titan.seconds_until_leave) + 1)}s")
+            rows.append(("cyclone", f"Cyclone Titan leaves in {max(0, int(self.cyclone_titan.seconds_until_leave) + 1)}s", (225, 225, 225)))
         else:
-            hints.append(f"Next Cyclone Titan: {self._format_mmss(self.cyclone_titan.seconds_until_spawn)}")
-        y = 8
-        for hint in hints:
-            surf = self._font.render(hint, True, (255, 255, 255))
-            shadow = self._font.render(hint, True, (0, 0, 0))
-            self.screen.blit(shadow, (11, y + 1))
-            self.screen.blit(surf,   (10, y))
-            y += 22
+            rows.append(("cyclone", f"Next Cyclone Titan {self._format_mmss(self.cyclone_titan.seconds_until_spawn)}", (210, 210, 210)))
+
+        # Layout: an icon column + text column inside a rounded panel.
+        pad = 10
+        icon_sz = 16
+        gap = 8
+        row_h = 24
+        title_text = "FARM STATUS"
+        title_h = self._font.get_height() + 6
+
+        text_w = max((self._small_font.size(t)[0] for _, t, _ in rows), default=0)
+        title_w = self._font.size(title_text)[0]
+        inner_w = max(icon_sz + gap + text_w, title_w)
+        panel_w = pad + inner_w + pad
+        panel_h = pad + title_h + len(rows) * row_h + pad
+
+        ox, oy = 8, 8
+        self.screen.blit(self._wood_panel(panel_w, panel_h), (ox, oy))
+        # Carved wooden frame (dark groove + light highlight).
+        frame = pygame.Rect(ox, oy, panel_w, panel_h)
+        pygame.draw.rect(self.screen, (92, 56, 28), frame, 3, border_radius=12)
+        pygame.draw.rect(self.screen, (150, 100, 55), frame, 1, border_radius=12)
+
+        # Title + separator (carved look via dark shadow under cream text).
+        title_shadow = self._font.render(title_text, True, (40, 24, 12))
+        title_surf = self._font.render(title_text, True, (245, 232, 200))
+        self.screen.blit(title_shadow, (ox + pad + 1, oy + pad))
+        self.screen.blit(title_surf, (ox + pad, oy + pad - 1))
+        sep_y = oy + pad + title_h - 5
+        pygame.draw.line(self.screen, (92, 56, 28), (ox + pad, sep_y), (ox + panel_w - pad, sep_y), 1)
+        pygame.draw.line(self.screen, (150, 100, 55), (ox + pad, sep_y + 1), (ox + panel_w - pad, sep_y + 1), 1)
+
+        y = oy + pad + title_h
+        for kind, text, color in rows:
+            irect = pygame.Rect(ox + pad, y + (row_h - icon_sz) // 2, icon_sz, icon_sz)
+            self._draw_hud_icon(kind, irect)
+            ty = y + (row_h - self._small_font.get_height()) // 2
+            shadow = self._small_font.render(text, True, (35, 20, 10))
+            tsurf = self._small_font.render(text, True, color)
+            self.screen.blit(shadow, (irect.right + gap + 1, ty + 1))
+            self.screen.blit(tsurf, (irect.right + gap, ty))
+            y += row_h
 
         # Flash 'Perfect Block!' when a perfect block was recently registered
         now = pygame.time.get_ticks() / 1000.0
@@ -408,12 +502,77 @@ class Game:
                 msg = "Perfect Block!"
                 surf = self._font.render(msg, True, (255, 215, 0))
                 shadow = self._font.render(msg, True, (0, 0, 0))
-                sx = (self._width - surf.get_width()) // 2
+                sx = (self._field_rect.width - surf.get_width()) // 2
                 sy = 40
                 self.screen.blit(shadow, (sx + 2, sy + 2))
                 self.screen.blit(surf, (sx, sy))
                 perfect_shown = True
                 break
+
+    def _draw_hud_icon(self, kind: str, rect: pygame.Rect) -> None:
+        s = self.screen
+        cx, cy = rect.center
+        if kind == "day":
+            pygame.draw.rect(s, (235, 235, 235), rect, border_radius=3)
+            top = pygame.Rect(rect.left, rect.top, rect.width, 5)
+            pygame.draw.rect(s, (200, 80, 70), top, border_top_left_radius=3, border_top_right_radius=3)
+            for gx in range(3):
+                for gy in range(2):
+                    pygame.draw.rect(s, (120, 120, 120), (rect.left + 3 + gx * 4, rect.top + 8 + gy * 4, 2, 2))
+        elif kind == "market":
+            r = rect.width // 2
+            pygame.draw.circle(s, (230, 195, 90), (cx, cy), r)
+            pygame.draw.circle(s, (180, 150, 60), (cx, cy), r, 1)
+            sign = self._small_font.render("$", True, (120, 90, 30))
+            s.blit(sign, sign.get_rect(center=(cx, cy)))
+        elif kind == "weather":
+            ev = self._weather_event
+            if ev == "Heatwave":
+                for a in range(0, 360, 45):
+                    ex = cx + math.cos(math.radians(a)) * 8
+                    ey = cy + math.sin(math.radians(a)) * 8
+                    pygame.draw.line(s, (240, 170, 60), (cx, cy), (ex, ey), 2)
+                pygame.draw.circle(s, (245, 200, 70), (cx, cy), 5)
+            elif ev == "Gusts":
+                for yy in (-3, 1, 5):
+                    pygame.draw.arc(s, (210, 225, 235), (rect.left, cy + yy - 4, rect.width, 9), 3.6, 6.1, 2)
+            else:  # Drizzle (and any other) → rain cloud
+                pygame.draw.circle(s, (200, 205, 210), (cx - 2, cy - 1), 5)
+                pygame.draw.circle(s, (200, 205, 210), (cx + 3, cy - 1), 4)
+                pygame.draw.rect(s, (200, 205, 210), (cx - 6, cy - 1, 11, 5))
+                for dx in (-4, 0, 4):
+                    pygame.draw.line(s, (120, 170, 230), (cx + dx, cy + 5), (cx + dx, cy + 8), 1)
+        elif kind == "storm":
+            pygame.draw.circle(s, (120, 125, 135), (cx - 3, cy - 1), 5)
+            pygame.draw.circle(s, (120, 125, 135), (cx + 3, cy - 2), 4)
+            pygame.draw.rect(s, (120, 125, 135), (cx - 7, cy - 2, 13, 5))
+            pygame.draw.polygon(s, (245, 220, 80), [(cx - 1, cy + 1), (cx + 3, cy + 1), (cx, cy + 8)])
+        elif kind == "cyclone":
+            for i, r in enumerate((7, 5, 3)):
+                yy = cy - 6 + i * 5
+                pygame.draw.arc(s, (180, 200, 220), (cx - r, yy - 3, 2 * r, 8), 3.4, 6.2, 2)
+            pygame.draw.line(s, (180, 200, 220), (cx, cy + 5), (cx - 2, cy + 9), 2)
+
+    def _wood_panel(self, w: int, h: int) -> pygame.Surface:
+        """A rounded wooden plaque matching the seed panel's wood texture."""
+        panel = pygame.Surface((w, h), pygame.SRCALPHA)
+        if self._ui_panel_image:
+            wood = pygame.transform.smoothscale(self._ui_panel_image, (w, h)).convert_alpha()
+            panel.blit(wood, (0, 0))
+        else:
+            panel.fill((165, 103, 52, 255))
+            for i in range(5):
+                x = int((i + 0.5) / 5 * w)
+                pygame.draw.line(panel, (150, 92, 46), (x - 6, 0), (x + 4, h), 2)
+        # Slight darkening so the text stays readable on the warm wood.
+        dark = pygame.Surface((w, h), pygame.SRCALPHA)
+        dark.fill((40, 24, 10, 70))
+        panel.blit(dark, (0, 0))
+        # Round the corners by multiplying through a rounded alpha mask.
+        mask = pygame.Surface((w, h), pygame.SRCALPHA)
+        pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(), border_radius=12)
+        panel.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        return panel
 
     @staticmethod
     def _format_mmss(seconds: float) -> str:
@@ -573,6 +732,8 @@ class Game:
             slot_growth_mult = growth_mult
             if heavy_rain_over_slot:
                 slot_growth_mult *= float(HEAVY_RAIN_GROWTH_MULT)
+            if self._weather_event == "Drizzle":
+                slot_growth_mult *= float(WEATHER_DRIZZLE_GROWTH_MULT)
             if getattr(slot, "compost_boost_remaining", 0.0) > 0.0:
                 slot_growth_mult *= float(COMPOST_GROWTH_MULT)
             slot.update(
@@ -626,6 +787,16 @@ class Game:
         title = self._font.render("Seeds", True, (230, 230, 230))
         self.screen.blit(title, (left, 16))
 
+        # Save button (top-right of the panel) overwrites the save file.
+        self._save_button = pygame.Rect(panel_rect.right - 16 - 66, 14, 66, 26)
+        saving = self._save_flash_timer > 0
+        btn_bg = (70, 140, 90) if saving else (70, 90, 110)
+        pygame.draw.rect(self.screen, btn_bg, self._save_button, border_radius=6)
+        pygame.draw.rect(self.screen, (120, 150, 130), self._save_button, 2, border_radius=6)
+        save_label = "Saved!" if saving else "Save"
+        save_text = self._small_font.render(save_label, True, (235, 240, 235))
+        self.screen.blit(save_text, save_text.get_rect(center=self._save_button.center))
+
         money_color = (245, 230, 120)
         if self._money_flash_timer > 0:
             money_color = (210, 70, 70)
@@ -647,6 +818,7 @@ class Game:
 
         # ── seeds grid ───────────────────────────────────────────────────
         self._seed_buttons = []
+        self._locked_seed_buttons = []
         seed_cols = 4
         button_size = 48
         padding = 8
@@ -663,6 +835,26 @@ class Game:
                 button_size,
                 button_size,
             )
+
+            unlocked = self._is_seed_unlocked(seed)
+            if not unlocked:
+                # Locked: dimmed plate + ghosted icon + padlock. Click to buy.
+                affordable_unlock = self.money >= int(getattr(seed, "unlock_at", 0))
+                plate = (50, 52, 60) if affordable_unlock else (44, 46, 52)
+                pygame.draw.rect(self.screen, plate, rect, border_radius=8)
+                pygame.draw.rect(self.screen, (78, 82, 92), rect, 2, border_radius=8)
+                icon = self._seed_icons.get(seed.icon_filename)
+                if icon:
+                    ghost = icon.copy()
+                    ghost.set_alpha(45)
+                    self.screen.blit(ghost, ghost.get_rect(center=(rect.centerx, rect.centery - 7)))
+                self._draw_lock_icon((rect.centerx, rect.centery - 6))
+                price = int(getattr(seed, "unlock_at", 0))
+                hint_color = (235, 210, 120) if affordable_unlock else (150, 120, 90)
+                hint = self._small_font.render(f"${price}", True, hint_color)
+                self.screen.blit(hint, hint.get_rect(midbottom=(rect.centerx, rect.bottom - 3)))
+                self._locked_seed_buttons.append((seed, rect))
+                continue
 
             affordable = self._can_afford_seed(seed)
             bg = (70, 80, 95) if affordable else (55, 60, 70)
@@ -792,14 +984,20 @@ class Game:
             self.screen.blit(empty, (left, y))
         else:
             lines = sorted(self.inventory.items(), key=lambda kv: kv[0].lower())
-            line_h = 22
+            size = self.ITEM_ICON_SIZE
+            line_h = size + 6
+            inv_right = left + (UI_PANEL_W - 32)
             max_lines = max(0, int((inv_bottom - y) // line_h))
             shown = 0
             for name, count in lines:
                 if shown >= max_lines:
                     break
-                line = self._small_font.render(f"{name}: {count}", True, (210, 210, 210))
-                self.screen.blit(line, (left, y))
+                row_mid = y + size // 2
+                self.screen.blit(self._item_icon(name), (left, y))
+                name_s = self._small_font.render(name, True, (215, 215, 215))
+                self.screen.blit(name_s, name_s.get_rect(midleft=(left + size + 6, row_mid)))
+                count_s = self._small_font.render(f"x{count}", True, (245, 235, 150))
+                self.screen.blit(count_s, count_s.get_rect(midright=(inv_right, row_mid)))
                 y += line_h
                 shown += 1
 
@@ -891,6 +1089,21 @@ class Game:
         return
 
     def _handle_farm_event(self, event: pygame.event.Event):
+        # If a purchase confirmation overlay is active, limit interactions to it.
+        if self._show_purchase_confirm:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                pos = event.pos
+                confirm = self._purchase_confirm_buttons.get("confirm")
+                cancel = self._purchase_confirm_buttons.get("cancel")
+                if confirm and confirm.collidepoint(pos):
+                    self._confirm_purchase()
+                    return
+                if cancel and cancel.collidepoint(pos):
+                    self._show_purchase_confirm = False
+                    self._pending_purchase = None
+                    return
+            return
+
         # If a sell confirmation overlay is active, limit interactions to it.
         if self._show_sell_confirm:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -927,6 +1140,12 @@ class Game:
                     self._money_flash_timer = 20
                 return
 
+            locked = self._locked_seed_at_pos(event.pos)
+            if locked:
+                self._pending_purchase = locked
+                self._show_purchase_confirm = True
+                return
+
             tool_id = self._tool_at_pos(event.pos)
             if tool_id:
                 if self.selected_tool == tool_id:
@@ -935,6 +1154,10 @@ class Game:
                     self.selected_tool = tool_id
                     self.selected_seed = None
                     self.drag_seed = None
+                return
+
+            if self._save_button.collidepoint(event.pos):
+                self.save_game()
                 return
 
             if self._sell_button.collidepoint(event.pos):
@@ -968,6 +1191,12 @@ class Game:
 
     def _seed_at_pos(self, pos: tuple[int, int]) -> PlantType | None:
         for seed, rect in self._seed_buttons:
+            if rect.collidepoint(pos):
+                return seed
+        return None
+
+    def _locked_seed_at_pos(self, pos: tuple[int, int]) -> PlantType | None:
+        for seed, rect in self._locked_seed_buttons:
             if rect.collidepoint(pos):
                 return seed
         return None
@@ -1008,12 +1237,129 @@ class Game:
         raw = pygame.image.load(path).convert_alpha()
         self._coin_icon = pygame.transform.smoothscale(raw, (20, 20))
 
+    def _load_lock_icon(self):
+        path = os.path.join(PROPS_DIR, "lock_icon.png")
+        if not os.path.exists(path):
+            return
+        raw = pygame.image.load(path).convert_alpha()
+        self._lock_icon = pygame.transform.smoothscale(raw, (26, 26))
+
     def _load_dead_plant(self):
         path = os.path.join(PROPS_DIR, "dead_plant.png")
         if not os.path.exists(path):
             return
         raw = pygame.image.load(path).convert_alpha()
         self._dead_plant_image = pygame.transform.smoothscale(raw, (PLANT_SPRITE_W, PLANT_SPRITE_H))
+
+    # ── item icons (inventory) ───────────────────────────────────────────
+    ITEM_ICON_SIZE = 18
+
+    def _build_item_icons(self):
+        size = self.ITEM_ICON_SIZE
+        # Crop products reuse their seed icon.
+        for seed in self.seeds:
+            icon = self._seed_icons.get(seed.icon_filename)
+            if icon and seed.product_name not in self._item_icons:
+                self._item_icons[seed.product_name] = pygame.transform.smoothscale(icon, (size, size))
+        # Any other item may supply a dedicated props/<name>_icon.png.
+        for name in self.items:
+            if name in self._item_icons:
+                continue
+            filename = name.lower().replace(" ", "_") + "_icon.png"
+            path = os.path.join(PROPS_DIR, filename)
+            if os.path.exists(path):
+                raw = pygame.image.load(path).convert_alpha()
+                self._item_icons[name] = pygame.transform.smoothscale(raw, (size, size))
+
+    def _item_icon(self, name: str) -> pygame.Surface:
+        cached = self._item_icons.get(name)
+        if cached is not None:
+            return cached
+        # Generate a simple lettered placeholder for items without art.
+        size = self.ITEM_ICON_SIZE
+        surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        h = abs(hash(name))
+        color = (70 + h % 130, 70 + (h // 7) % 130, 70 + (h // 13) % 130)
+        pygame.draw.rect(surf, color, surf.get_rect(), border_radius=4)
+        pygame.draw.rect(surf, (225, 225, 230), surf.get_rect(), 1, border_radius=4)
+        letter = self._small_font.render(name[0].upper(), True, (245, 245, 245))
+        surf.blit(letter, letter.get_rect(center=surf.get_rect().center))
+        self._item_icons[name] = surf
+        return surf
+
+    # ── save / load ──────────────────────────────────────────────────────
+    def _seed_lookup(self) -> dict:
+        return {type(seed).__name__: seed for seed in self.seeds}
+
+    def save_game(self, flash: bool = True):
+        data = {
+            "version": 1,
+            "money": int(self.money),
+            "total_earned": int(self._total_earned),
+            "unlocked_seeds": sorted(self._unlocked_seeds),
+            "inventory": {str(k): int(v) for k, v in self.inventory.items()},
+            "world_seconds": float(self._world_seconds),
+            "slots": [slot.to_dict() for slot in self.slots],
+        }
+        try:
+            with open(SAVE_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            if flash:
+                self._save_flash_timer = 90
+        except OSError:
+            pass
+
+    def load_game(self):
+        if not os.path.exists(SAVE_PATH):
+            # No progress yet: create a fresh save from the starting state.
+            self.save_game()
+            return
+        try:
+            with open(SAVE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError, ValueError):
+            return
+
+        self.money = int(data.get("money", self.money))
+        self._total_earned = int(data.get("total_earned", self._total_earned))
+
+        # Seeds available with no purchase are always unlocked. Then layer on any
+        # explicitly purchased seeds, and (for saves predating the purchase model)
+        # migrate by unlocking anything the old total-earned threshold would have.
+        unlocked = {
+            type(s).__name__ for s in self.seeds if int(getattr(s, "unlock_at", 0)) <= 0
+        }
+        if "unlocked_seeds" in data:
+            unlocked |= {str(n) for n in (data.get("unlocked_seeds") or [])}
+        else:
+            unlocked |= {
+                type(s).__name__
+                for s in self.seeds
+                if self._total_earned >= int(getattr(s, "unlock_at", 0))
+            }
+        self._unlocked_seeds = unlocked
+
+        inv = data.get("inventory", {}) or {}
+        self.inventory = {str(k): int(v) for k, v in inv.items() if int(v) > 0}
+        self._world_seconds = float(data.get("world_seconds", 0.0))
+
+        lookup = self._seed_lookup()
+        for slot, sdata in zip(self.slots, data.get("slots", []) or []):
+            slot.from_dict(sdata, lookup)
+
+        self._sync_time_after_load()
+
+    def _sync_time_after_load(self):
+        # Re-derive day/week/season from the restored world clock and roll a
+        # fresh market/weather for the current day.
+        day_index = int(self._world_seconds // float(IN_GAME_DAY_SECONDS))
+        week_index = int(day_index // int(IN_GAME_DAYS_PER_WEEK))
+        self._day_index = day_index
+        self._last_day_index = day_index
+        self._week_index = week_index
+        self._last_week_index = week_index
+        self._season_index = week_index % len(SEASON_NAMES) if SEASON_NAMES else 0
+        self._on_new_day(day_index)
 
     def _load_plant_phases(self):
         for seed in self.seeds:
@@ -1086,6 +1432,92 @@ class Game:
 
         self.screen.blit(overlay, rect.topleft)
 
+    def _confirm_purchase(self):
+        seed = self._pending_purchase
+        if seed is None:
+            self._show_purchase_confirm = False
+            return
+        price = int(getattr(seed, "unlock_at", 0))
+        if self.money >= price:
+            self.money -= price
+            self._unlocked_seeds.add(type(seed).__name__)
+            self.save_game(flash=False)
+            self._show_purchase_confirm = False
+            self._pending_purchase = None
+        else:
+            # Not enough money: flash the balance and keep the dialog open.
+            self._money_flash_timer = 20
+
+    def _draw_purchase_confirm(self):
+        seed = self._pending_purchase
+        if seed is None:
+            return
+        w, h = 420, 160
+        rect = pygame.Rect((SCREEN_W - w) // 2, (SCREEN_H - h) // 2, w, h)
+        overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+        pygame.draw.rect(overlay, (20, 20, 30, 225), overlay.get_rect(), border_radius=8)
+        pygame.draw.rect(overlay, (120, 95, 55), overlay.get_rect(), 2, border_radius=8)
+        cx = w // 2
+
+        title = self._font.render(f"Buy {seed.name}?", True, (240, 240, 240))
+        overlay.blit(title, title.get_rect(center=(cx, 28)))
+        price = int(getattr(seed, "unlock_at", 0))
+        afford = self.money >= price
+        price_color = (220, 220, 180) if afford else (220, 140, 120)
+        price_text = self._font.render(f"Unlock cost: ${price}", True, price_color)
+        overlay.blit(price_text, price_text.get_rect(center=(cx, 64)))
+        if not afford:
+            warn = self._small_font.render("Not enough money", True, (220, 140, 120))
+            overlay.blit(warn, warn.get_rect(center=(cx, 92)))
+
+        btn_w, btn_h = 140, 36
+        spacing = 18
+        by = h - btn_h - 16
+        group_w = btn_w * 2 + spacing
+        cancel = pygame.Rect(cx - group_w // 2, by, btn_w, btn_h)
+        confirm = pygame.Rect(cancel.right + spacing, by, btn_w, btn_h)
+        pygame.draw.rect(overlay, (60, 140, 70), confirm, border_radius=8)
+        pygame.draw.rect(overlay, (140, 80, 60), cancel, border_radius=8)
+        c_text = self._small_font.render("Buy", True, (240, 240, 240))
+        x_text = self._small_font.render("Cancel", True, (240, 240, 240))
+        overlay.blit(c_text, c_text.get_rect(center=confirm.center))
+        overlay.blit(x_text, x_text.get_rect(center=cancel.center))
+
+        self._purchase_confirm_buttons["confirm"] = confirm.move(rect.left, rect.top)
+        self._purchase_confirm_buttons["cancel"] = cancel.move(rect.left, rect.top)
+
+        self.screen.blit(overlay, rect.topleft)
+
+    def _is_seed_unlocked(self, seed: PlantType) -> bool:
+        if int(getattr(seed, "unlock_at", 0)) <= 0:
+            return True
+        return type(seed).__name__ in self._unlocked_seeds
+
+    def _draw_lock_icon(self, center: tuple[int, int]) -> None:
+        # Prefer the editable padlock image; fall back to a drawn one.
+        if self._lock_icon is not None:
+            self.screen.blit(self._lock_icon, self._lock_icon.get_rect(center=center))
+            return
+
+        surf = pygame.Surface((26, 30), pygame.SRCALPHA)
+        gold = (244, 212, 120)
+        dark = (88, 64, 28)
+
+        pygame.draw.arc(surf, dark, (6, 1, 14, 18), 0.0, math.pi, 6)
+        pygame.draw.arc(surf, gold, (7, 2, 12, 16), 0.0, math.pi, 4)
+        for lx in (8, 18):
+            pygame.draw.line(surf, gold, (lx, 9), (lx, 14), 4)
+
+        body = pygame.Rect(3, 12, 20, 16)
+        pygame.draw.rect(surf, dark, body, border_radius=5)
+        inner = body.inflate(-4, -4)
+        pygame.draw.rect(surf, gold, inner, border_radius=4)
+
+        pygame.draw.circle(surf, dark, (13, 19), 3)
+        pygame.draw.polygon(surf, dark, [(11, 26), (15, 26), (14, 20), (12, 20)])
+
+        self.screen.blit(surf, surf.get_rect(center=center))
+
     def _can_afford_seed(self, seed: PlantType) -> bool:
         if self.money < seed.cost:
             return False
@@ -1141,7 +1573,7 @@ class Game:
                 self._money_flash_timer = 20
                 return
             self.money -= int(SCARECROW_COST)
-            slot.place_scarecrow()
+            slot.place_scarecrow(SCARECROW_DURATION_SECONDS)
             return
 
         if tool_id == TOOL_LIGHTNING_ROD:
@@ -1183,5 +1615,6 @@ class Game:
         if not self._pending_sell_total:
             return
         self.money += int(self._pending_sell_total)
+        self._total_earned += int(self._pending_sell_total)
         self.inventory = {}
         self._pending_sell_total = None

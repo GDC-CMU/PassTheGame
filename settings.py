@@ -197,6 +197,11 @@ WEATHER_HEATWAVE_SUN_GAIN_MULT = 1.25
 
 WEATHER_DRIZZLE_WATER_BONUS = 0.06
 WEATHER_DRIZZLE_SUN_GAIN_MULT = 0.70
+# Drizzle is gentle rain, so it also nudges growth a little.
+WEATHER_DRIZZLE_GROWTH_MULT = 1.08
+# Overcast sky shown while drizzle is active (grayer / less bright than a clear
+# day, but kept light enough that it still reads as daytime, not night).
+SKY_DRIZZLE = (140, 148, 152)
 
 WEATHER_GUSTS_WIND_MULT = 2.2
 
@@ -208,6 +213,8 @@ COMPOST_GROWTH_MULT = 1.35
 
 SCARECROW_COST = 18
 SCARECROW_RADIUS_SLOTS = 1
+# A placed scarecrow lasts ~3 in-game days, then breaks and must be replaced.
+SCARECROW_DURATION_SECONDS = IN_GAME_DAY_SECONDS * 3
 
 LIGHTNING_ROD_COST = 25
 LIGHTNING_ROD_CHARGES = 2
