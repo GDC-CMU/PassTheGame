@@ -51,20 +51,22 @@ class Cloud(pygame.sprite.Sprite):
 
     Controls
     --------
-    Arrow keys/WASD  – move cloud
+    First cloud (right): arrow keys. Second cloud (left): WASD.
     Click       – toggle rain on / off
     """
 
     WIDTH  = 160
     HEIGHT = 80
 
-    def __init__(self, start_pos=(CLOUD_START_X, CLOUD_START_Y), controls=None):
+    def __init__(self, start_pos=(CLOUD_START_X, CLOUD_START_Y), controls=None, control_label=None):
         super().__init__()
         # I keep a simple 3-state rain mode so the player can choose intensity.
         self.rain_intensity = int(RAIN_INTENSITY_OFF)
         self.raindrops: list[RainDrop] = []
         
         self.controls = controls or DEFAULT_CONTROLS
+        self.control_label = control_label
+        self._label_font = pygame.font.SysFont("arial", 14, bold=True) if control_label else None
         self.X_float = float(start_pos[0]) #if wind_speed isn't int
         self.wind_speed = float(WIND_SPEED)
 
@@ -113,6 +115,17 @@ class Cloud(pygame.sprite.Sprite):
         if self.raining:
             for drop in self.raindrops:
                 drop.draw(surface)
+
+    def draw_control_label(self, surface: pygame.Surface) -> None:
+        if not self.control_label or not self._label_font:
+            return
+        label = self.control_label
+        shadow = self._label_font.render(label, True, (0, 0, 0))
+        text = self._label_font.render(label, True, (255, 255, 255))
+        x = self.rect.centerx - text.get_width() // 2
+        y = self.rect.bottom + 4
+        surface.blit(shadow, (x + 1, y + 1))
+        surface.blit(text, (x, y))
 
     @property
     def raining(self) -> bool:

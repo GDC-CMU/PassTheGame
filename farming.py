@@ -114,6 +114,20 @@ class PlantSlot:
         return self.seed is not None and self.growth_stage >= self.seed.growth_stages
 
     @property
+    def growth_ratio(self) -> float:
+        """0.0 at planting → 1.0 when ready to harvest."""
+        if not self.seed or self.dead:
+            return 0.0
+        if self.harvestable:
+            return 1.0
+        stages = int(self.seed.growth_stages)
+        if stages <= 1:
+            return 1.0
+        per_stage = max(0.001, float(self.seed.seconds_per_stage))
+        stage_progress = (self.growth_stage - 1) + min(1.0, self._growth_frames / per_stage)
+        return max(0.0, min(1.0, stage_progress / (stages - 1)))
+
+    @property
     def bad_ratio(self) -> float:
         """0.0 when healthy, approaching 1.0 as the plant nears death."""
         if not self.seed or self.dead or self.harvestable:
@@ -324,7 +338,32 @@ class PlantSlot:
             pygame.draw.line(surface, stem_color, (cx, self.rect.bottom - 6), (cx, cy), 2)
             pygame.draw.circle(surface, color, (cx, cy), size)
 
+        self._draw_growth_bar(surface)
         self._draw_minibars(surface)
+
+    def _draw_growth_bar(self, surface: pygame.Surface) -> None:
+        if not self.seed or self.dead:
+            return
+
+        meter_h = 10
+        lift = 34
+        meter_w = max(16, self.rect.width - 4)
+        meter_x = self.rect.centerx - meter_w // 2
+        meter_y = self.rect.top - meter_h - lift
+        if meter_y < 0:
+            meter_y = 0
+
+        ratio = self.growth_ratio
+        bg = pygame.Rect(meter_x, meter_y, meter_w, meter_h)
+        pygame.draw.rect(surface, (20, 24, 30), bg, border_radius=4)
+        pygame.draw.rect(surface, (240, 240, 245), bg, 2, border_radius=4)
+
+        inner_w = meter_w - 4
+        fill_w = max(0, int(inner_w * ratio))
+        if fill_w > 0:
+            fill = pygame.Rect(meter_x + 2, meter_y + 2, fill_w, meter_h - 4)
+            fill_color = (55, 220, 100) if self.harvestable else (100, 190, 75)
+            pygame.draw.rect(surface, fill_color, fill, border_radius=3)
 
     def _draw_scarecrow(self, surface: pygame.Surface) -> None:
         rect = self.rect
@@ -523,12 +562,19 @@ class PlantSlot:
         lines = [
             f"{self.seed.name}",
             f"Status: {status}",
+        ]
+        if self.harvestable:
+            lines.append("Ready — click to harvest")
+        desc = getattr(self.seed, "description", "")
+        if desc:
+            lines.append(desc if len(desc) <= 44 else desc[:41] + "...")
+        lines.extend([
             f"Stage: {stage}/{self.seed.growth_stages}",
             f"Water: {int(self.water)}",
             f"Water range: {int(self.seed.water_min)}-{int(self.seed.water_max)}",
             f"Sun: {int(self.sun)}",
             f"Sun range: {int(self.seed.sun_min)}-{int(self.seed.sun_max)}",
-        ]
+        ])
 
         if self.lightning_rod_charges > 0:
             lines.append(f"Lightning rod charges: {int(self.lightning_rod_charges)}")

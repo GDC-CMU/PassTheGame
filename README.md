@@ -71,7 +71,7 @@ use following optional class attributes for your PlantType subclass
 - Click harvestable plant to collect
 - Click dead plant to clear
 - P: pause / resume (animations keep playing)
-- ESC: quit
+- Main Menu button (top-right of the field) or ESC: return to main menu
 - B: (cheat) toggle Storm Titan spawn / despawn
 - C: (cheat) toggle Cyclone Titan spawn / despawn
 - V: (cheat) force-spawn the chipmunk thief
@@ -154,6 +154,14 @@ Add your name and 1–2 lines about what you added below.
   Reworked the per-plant sun/rain meters, added save/load with 2-min auto-save & save-aware main menu (New Game / Continue).
   Redesigned the scarecrow (placeable and has durability meter) and the wooden top-left "Farm Status" HUD; added sprites for the five new crops (added 3 commits ago).
   Added a seed-unlock shop where you can spend money to unlock some seeds.
+
+- **Funan**
+  Clarify cloud controls in the tutorial (arrow keys for the right cloud, WASD for the left cloud).
+  Add a visible Main Menu button during gameplay so players can exit without relying on ESC.
+  Extended the tutorial with sell flow, chipmunk/snake thieves, tools, bosses, and save/HUD basics.
+  Show how soon they are until they can sell their plant with progress bar
+  Added in-game help: seed/tool hover descriptions, Save button tip, and Sell All error feedback.
+
 
 ---
 

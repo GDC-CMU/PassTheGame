@@ -60,6 +60,14 @@ TOOL_ICON_FILENAMES = {
     TOOL_LIGHTNING_ROD: "lightning_rod_icon.png",
 }
 
+TOOL_HELP = {
+    TOOL_COMPOST: "Speeds growth on a planted crop. Uses 1 Compost from inventory.",
+    TOOL_SCARECROW: f"Blocks thieves on nearby plots until it breaks. Costs ${SCARECROW_COST}.",
+    TOOL_LIGHTNING_ROD: f"Protects one slot from boss lightning. Costs ${LIGHTNING_ROD_COST}.",
+}
+PANEL_SAVE_HELP = "Save your farm now. Auto-save also runs every 2 minutes."
+PANEL_SELL_HELP = "Sell all harvested items in Inventory for money."
+
 
 class Game:
     """
@@ -111,8 +119,8 @@ class Game:
             "down": pygame.K_s,
         }
         self.clouds = {
-            Cloud(start_pos=(CLOUD_START_X, CLOUD_START_Y)),
-            Cloud(start_pos=(CLOUD2_START_X, CLOUD2_START_Y), controls=WASD)
+            Cloud(start_pos=(CLOUD_START_X, CLOUD_START_Y), control_label="Arrows"),
+            Cloud(start_pos=(CLOUD2_START_X, CLOUD2_START_Y), controls=WASD, control_label="WASD"),
         }
 
         self.all_sprites = pygame.sprite.Group(self.sun, *self.clouds)
@@ -160,6 +168,9 @@ class Game:
         self._item_icons: dict[str, pygame.Surface] = {}
         self._plant_phase_icons: dict[str, pygame.Surface] = {}
         self._hover_slot: PlantSlot | None = None
+        self._panel_help_lines: list[str] = []
+        self._sell_feedback_timer = 0
+        self._sell_feedback_msg = ""
         self._sell_button = pygame.Rect(0, 0, 0, 0)
         self._save_button = pygame.Rect(0, 0, 0, 0)
         self._save_flash_timer = 0
@@ -192,6 +203,7 @@ class Game:
         # ── pause menu buttons ────────────────────────────────────────────────
         self._pause_resume_btn = pygame.Rect(SCREEN_W // 2 - 100, SCREEN_H // 2 - 15, 200, 45)
         self._pause_quit_btn = pygame.Rect(SCREEN_W // 2 - 100, SCREEN_H // 2 + 35, 200, 45)
+        self._main_menu_btn = pygame.Rect(self._field_rect.right - 118, 8, 110, 28)
 
         # New Game starts from the fresh state set up above and overwrites the
         # save slot. Continue loads the existing save (creating one if missing).
@@ -210,9 +222,11 @@ class Game:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                elif self._main_menu_button_clicked(event):
                     running = False
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    running = False
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_p:
                     self.paused = not self.paused
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_b:
                     self._toggle_boss(self.storm_titan)
@@ -249,6 +263,8 @@ class Game:
             self._money_flash_timer -= 1
         if self._save_flash_timer > 0:
             self._save_flash_timer -= 1
+        if self._sell_feedback_timer > 0:
+            self._sell_feedback_timer -= 1
 
         # Periodic autosave (silent, no "Saved!" flash).
         self._autosave_timer += dt
@@ -391,6 +407,7 @@ class Game:
         for c in self.clouds:
             c.draw_rain(self.screen)
             self.screen.blit(c.image, c.rect)
+            c.draw_control_label(self.screen)
 
         self._draw_ground()
         self._draw_slots()
@@ -415,6 +432,7 @@ class Game:
             self._draw_sell_confirm()
         if self._show_purchase_confirm:
             self._draw_purchase_confirm()
+        self._draw_main_menu_button()
         pygame.display.flip()
 
     def _draw_hud(self):
@@ -1029,6 +1047,109 @@ class Game:
                 self.screen.blit(cold_s, (left, m_y))
                 m_y += 18
 
+        self._draw_panel_help(panel_rect.left, UI_PANEL_W)
+
+    def _wrap_help_text(self, text: str, max_width: int) -> list[str]:
+        words = text.split()
+        if not words:
+            return []
+        lines: list[str] = []
+        current = words[0]
+        for word in words[1:]:
+            trial = f"{current} {word}"
+            if self._small_font.size(trial)[0] <= max_width:
+                current = trial
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+        return lines
+
+    def _seed_help_lines(self, seed: PlantType) -> list[str]:
+        lines = [f"{seed.name}  (${seed.cost} seed)"]
+        desc = getattr(seed, "description", "")
+        if desc:
+            lines.extend(self._wrap_help_text(desc, UI_PANEL_W - 40))
+        item = self.items.get(seed.product_name)
+        price = int(item.sell_price) if item else 0
+        lines.append(f"Harvest → {seed.product_name} (${price} each)")
+        unlock = int(getattr(seed, "unlock_at", 0))
+        if unlock > 0 and not self._is_seed_unlocked(seed):
+            lines.append(f"Locked — unlock for ${unlock}")
+        req = self._seed_item_requirement(seed)
+        if req:
+            item_name, count = req
+            lines.append(f"Needs {count}x {item_name} in inventory")
+        return lines
+
+    def _update_panel_hover(self, pos: tuple[int, int]) -> None:
+        self._panel_help_lines = []
+        if pos[0] < self._field_rect.width:
+            return
+
+        seed = self._seed_at_pos(pos)
+        if seed:
+            self._panel_help_lines = self._seed_help_lines(seed)
+            return
+
+        locked = self._locked_seed_at_pos(pos)
+        if locked:
+            self._panel_help_lines = self._seed_help_lines(locked)
+            return
+
+        tool_id = self._tool_at_pos(pos)
+        if tool_id:
+            help_text = TOOL_HELP.get(tool_id, tool_id)
+            self._panel_help_lines = self._wrap_help_text(help_text, UI_PANEL_W - 40)
+            return
+
+        if self._save_button.collidepoint(pos):
+            self._panel_help_lines = self._wrap_help_text(PANEL_SAVE_HELP, UI_PANEL_W - 40)
+            return
+
+        if self._sell_button.collidepoint(pos):
+            self._panel_help_lines = self._wrap_help_text(PANEL_SELL_HELP, UI_PANEL_W - 40)
+
+    def _show_sell_feedback(self, message: str) -> None:
+        self._sell_feedback_msg = message
+        self._sell_feedback_timer = 120
+
+    def _draw_panel_help(self, panel_left: int, panel_w: int) -> None:
+        pad = 12
+        box_w = panel_w - pad * 2
+        box_x = panel_left + pad
+
+        if self._sell_feedback_timer > 0 and self._sell_feedback_msg:
+            lines = self._wrap_help_text(self._sell_feedback_msg, box_w - 16)
+            line_h = self._small_font.get_height() + 2
+            box_h = 10 + len(lines) * line_h
+            box_y = self._sell_button.top - box_h - 8
+            box = pygame.Rect(box_x, box_y, box_w, box_h)
+            pygame.draw.rect(self.screen, (55, 28, 28), box, border_radius=6)
+            pygame.draw.rect(self.screen, (200, 100, 90), box, 2, border_radius=6)
+            ty = box_y + 5
+            for line in lines:
+                surf = self._small_font.render(line, True, (255, 210, 200))
+                self.screen.blit(surf, (box_x + 8, ty))
+                ty += line_h
+            return
+
+        if not self._panel_help_lines:
+            return
+
+        line_h = self._small_font.get_height() + 2
+        box_h = 10 + len(self._panel_help_lines) * line_h
+        box_y = self._sell_button.top - box_h - 8
+        box = pygame.Rect(box_x, box_y, box_w, box_h)
+        pygame.draw.rect(self.screen, (28, 32, 42), box, border_radius=6)
+        pygame.draw.rect(self.screen, (90, 100, 120), box, 2, border_radius=6)
+        ty = box_y + 5
+        for i, line in enumerate(self._panel_help_lines):
+            color = (235, 235, 235) if i == 0 else (190, 195, 205)
+            surf = self._small_font.render(line, True, color)
+            self.screen.blit(surf, (box_x + 8, ty))
+            ty += line_h
+
     def _draw_hover_tooltip(self):
         if not self._hover_slot or not self._hover_slot.planted:
             return
@@ -1077,7 +1198,7 @@ class Game:
         btn_font = pygame.font.SysFont("arial", 24)
         paused_text = win_font.render("Paused", True, (255, 255, 255))
         resume_text = btn_font.render("Resume", True, (255, 255, 255))
-        quit_text = btn_font.render("Quit", True, (255, 255, 255))
+        quit_text = btn_font.render("Main Menu", True, (255, 255, 255))
 
         pygame.draw.rect(self.screen, (70, 110, 150), self._pause_resume_btn, border_radius=6)
         pygame.draw.rect(self.screen, (70, 110, 150), self._pause_quit_btn, border_radius=6)
@@ -1087,6 +1208,22 @@ class Game:
         self.screen.blit(quit_text, quit_text.get_rect(center=self._pause_quit_btn.center))
 
         return
+
+    def _main_menu_button_clicked(self, event: pygame.event.Event) -> bool:
+        if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
+            return False
+        if self._show_sell_confirm or self._show_purchase_confirm:
+            return False
+        return self._main_menu_btn.collidepoint(event.pos)
+
+    def _draw_main_menu_button(self) -> None:
+        btn = self._main_menu_btn
+        hovered = btn.collidepoint(pygame.mouse.get_pos())
+        bg = (85, 100, 130) if hovered else (65, 80, 110)
+        pygame.draw.rect(self.screen, bg, btn, border_radius=6)
+        pygame.draw.rect(self.screen, (140, 160, 190), btn, 2, border_radius=6)
+        text = self._small_font.render("Main Menu", True, (235, 240, 245))
+        self.screen.blit(text, text.get_rect(center=btn.center))
 
     def _handle_farm_event(self, event: pygame.event.Event):
         # If a purchase confirmation overlay is active, limit interactions to it.
@@ -1124,6 +1261,7 @@ class Game:
 
         if event.type == pygame.MOUSEMOTION:
             self._hover_slot = self._slot_at_pos(event.pos)
+            self._update_panel_hover(event.pos)
             return
 
         if self.paused:
@@ -1607,6 +1745,10 @@ class Game:
                 mult = self._market_mult_for_item(name)
                 total += int(round(item.sell_price * mult)) * count
         if total == 0:
+            if not self.inventory:
+                self._show_sell_feedback("Nothing to sell — harvest crops into Inventory first.")
+            else:
+                self._show_sell_feedback("Nothing sellable in Inventory.")
             return
         self._pending_sell_total = int(total)
         self._show_sell_confirm = True
