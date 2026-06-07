@@ -150,6 +150,11 @@ Add your name and 1–2 lines about what you added below.
   Added a 'Quit' button to main menu.
   Edited the pause UI.
 
+- **Rawan**
+  Reworked the per-plant sun/rain meters, added save/load with 2-min auto-save & save-aware main menu (New Game / Continue).
+  Redesigned the scarecrow (placeable and has durability meter) and the wooden top-left "Farm Status" HUD; added sprites for the five new crops (added 3 commits ago).
+  Added a seed-unlock shop where you can spend money to unlock some seeds.
+
 ---
 
 Let's see how wild this game becomes 👀

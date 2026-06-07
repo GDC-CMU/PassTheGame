@@ -38,6 +38,9 @@ class PlantType(ABC):
     sprite_w: int | None = None
     sprite_h: int | None = None
     seed_item_name: str | None = None
+    # Total money earned (from selling) required before this seed unlocks. 0 =
+    # available from the start. Used by the seed panel to gate/dim crops.
+    unlock_at: int = 0
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -84,6 +87,7 @@ class Lettuce(PlantType):
 class Tomato(PlantType):
     name = "Tomato"
     cost = 7
+    unlock_at = 25
     product_name = "Tomato"
     growth_stages = 4
     seconds_per_stage = 5.0
@@ -104,6 +108,7 @@ class Tomato(PlantType):
 class Apple(PlantType):
     name = "Apple"
     cost = 20
+    unlock_at = 400
     product_name = "Apple"
     growth_stages = 4
     seconds_per_stage = 6.0
@@ -155,6 +160,7 @@ class StormSeed(PlantType):
 class Mushroom(PlantType):
     name = "Mushroom"
     cost = 3
+    unlock_at = 170
     product_name = "Mushroom"
     growth_stages = 2
     seconds_per_stage = 6.0
@@ -173,6 +179,7 @@ class Mushroom(PlantType):
 class Cactus(PlantType):
     name = "Cactus"
     cost = 6
+    unlock_at = 60
     product_name = "Cactus Fruit"
     growth_stages = 3
     seconds_per_stage = 5.5
@@ -192,6 +199,7 @@ class Cactus(PlantType):
 class Rice(PlantType):
     name = "Rice"
     cost = 4
+    unlock_at = 230
     product_name = "Rice"
     growth_stages = 3
     seconds_per_stage = 4.0
@@ -211,6 +219,7 @@ class Rice(PlantType):
 class NightBloom(PlantType):
     name = "Night Bloom"
     cost = 12
+    unlock_at = 300
     product_name = "Night Bloom"
     growth_stages = 4
     seconds_per_stage = 6.0
@@ -231,6 +240,7 @@ class NightBloom(PlantType):
 class Pumpkin(PlantType):
     name = "Pumpkin"
     cost = 10
+    unlock_at = 110
     product_name = "Pumpkin"
     growth_stages = 4
     seconds_per_stage = 6.5
