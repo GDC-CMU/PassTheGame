@@ -41,6 +41,7 @@ class PlantType(ABC):
     # Total money earned (from selling) required before this seed unlocks. 0 =
     # available from the start. Used by the seed panel to gate/dim crops.
     unlock_at: int = 0
+    description: str = ""  # one-line blurb for seed panel / tooltips
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -63,6 +64,7 @@ class Carrot(PlantType):
         "carrot_phase2.png",
         "carrot_phase3.png",
     ]
+    description = "Fast starter crop. Likes moderate water and sun."
 
 
 class Lettuce(PlantType):
@@ -82,6 +84,7 @@ class Lettuce(PlantType):
         "lettuce_phase2.png",
         "lettuce_phase3.png",
     ]
+    description = "Likes plenty of water and shade from harsh sun."
 
 
 class Tomato(PlantType):
@@ -103,6 +106,7 @@ class Tomato(PlantType):
         "tomato_phase3.png",
         "tomato_phase4.png",
     ]
+    description = "Takes longer to mature but sells for more."
 
 
 class Apple(PlantType):
@@ -128,6 +132,7 @@ class Apple(PlantType):
     regrow_to_stage = 3 #tree will go back to stage 3 after harvest
     sprite_w = 170
     sprite_h = 280 # since apple trees are taller than carrots!
+    description = "Regrows after harvest. Yields many apples at once."
 
 
 class StormSeed(PlantType):
@@ -155,6 +160,7 @@ class StormSeed(PlantType):
         "storm_seed_phase3.png",
         "storm_seed_phase4.png",
     ]
+    description = "Boss reward seed. Needs shade; planted from inventory."
 
 
 class Mushroom(PlantType):
@@ -174,6 +180,7 @@ class Mushroom(PlantType):
         "mushroom_phase1.png",
         "mushroom_phase2.png",
     ]
+    description = "Loves rain and low sun. Quick two-stage grower."
 
 
 class Cactus(PlantType):
@@ -194,6 +201,7 @@ class Cactus(PlantType):
         "cactus_phase2.png",
         "cactus_phase3.png",
     ]
+    description = "Thrives in bright sun with little water."
 
 
 class Rice(PlantType):
@@ -214,6 +222,7 @@ class Rice(PlantType):
         "rice_phase2.png",
         "rice_phase3.png",
     ]
+    description = "Keep it wet. Steady crop for rainy weather."
 
 
 class NightBloom(PlantType):
@@ -235,6 +244,7 @@ class NightBloom(PlantType):
         "nightbloom_phase3.png",
         "nightbloom_phase4.png",
     ]
+    description = "Shade-loving flower. Avoid bright midday sun."
 
 
 class Pumpkin(PlantType):
@@ -256,3 +266,4 @@ class Pumpkin(PlantType):
         "pumpkin_phase3.png",
         "pumpkin_phase4.png",
     ]
+    description = "Slow but valuable. Balanced water and sun."
