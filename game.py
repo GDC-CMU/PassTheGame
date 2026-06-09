@@ -200,6 +200,98 @@ class Game:
         self._load_dead_plant()
         self._build_item_icons()
 
+        # ── SFX ───────────────────────────────────────────────────────────────
+        self._sfx_plant: pygame.mixer.Sound | None = None
+        _sfx_path = os.path.join(os.path.dirname(__file__), "passthegame_audio", "planting.wav")
+        if os.path.exists(_sfx_path):
+            try:
+                self._sfx_plant = pygame.mixer.Sound(_sfx_path)
+            except Exception:
+                pass
+
+        self._sfx_harvest: pygame.mixer.Sound | None = None
+        _sfx_harvest_path = os.path.join(os.path.dirname(__file__), "passthegame_audio", "harvesting.mp3")
+        if os.path.exists(_sfx_harvest_path):
+            try:
+                self._sfx_harvest = pygame.mixer.Sound(_sfx_harvest_path)
+                self._sfx_harvest.set_volume(0.5)
+            except Exception:
+                pass
+
+        self._sfx_crickets: pygame.mixer.Sound | None = None
+        self._crickets_playing = False
+        _sfx_crickets_path = os.path.join(os.path.dirname(__file__), "passthegame_audio", "crickets.mp3")
+        if os.path.exists(_sfx_crickets_path):
+            try:
+                self._sfx_crickets = pygame.mixer.Sound(_sfx_crickets_path)
+                self._sfx_crickets.set_volume(0.5)
+            except Exception:
+                pass
+
+        self._sfx_nature: pygame.mixer.Sound | None = None
+        self._nature_playing = False
+        _sfx_nature_path = os.path.join(os.path.dirname(__file__), "passthegame_audio", "nature_ambience.mp3")
+        if os.path.exists(_sfx_nature_path):
+            try:
+                self._sfx_nature = pygame.mixer.Sound(_sfx_nature_path)
+            except Exception:
+                pass
+
+        self._sfx_ready_harvest: pygame.mixer.Sound | None = None
+        _sfx_ready_path = os.path.join(os.path.dirname(__file__), "passthegame_audio", "ready_to_harvest.mp3")
+        if os.path.exists(_sfx_ready_path):
+            try:
+                self._sfx_ready_harvest = pygame.mixer.Sound(_sfx_ready_path)
+            except Exception:
+                pass
+        self._prev_harvestable: set[int] = set()
+
+        self._sfx_lightning: pygame.mixer.Sound | None = None
+        _sfx_lightning_path = os.path.join(os.path.dirname(__file__), "passthegame_audio", "lightning.mp3")
+        if os.path.exists(_sfx_lightning_path):
+            try:
+                self._sfx_lightning = pygame.mixer.Sound(_sfx_lightning_path)
+            except Exception:
+                pass
+        self._prev_bolt_flashes: dict[int, float] = {}
+
+        self._sfx_will_die: pygame.mixer.Sound | None = None
+        _sfx_will_die_path = os.path.join(os.path.dirname(__file__), "passthegame_audio", "will_die.mp3")
+        if os.path.exists(_sfx_will_die_path):
+            try:
+                self._sfx_will_die = pygame.mixer.Sound(_sfx_will_die_path)
+            except Exception:
+                pass
+        self._prev_shaking: set[int] = set()
+
+        self._sfx_rain: pygame.mixer.Sound | None = None
+        self._rain_sfx_playing = False
+        _sfx_rain_path = os.path.join(os.path.dirname(__file__), "passthegame_audio", "rain.mp3")
+        if os.path.exists(_sfx_rain_path):
+            try:
+                self._sfx_rain = pygame.mixer.Sound(_sfx_rain_path)
+                self._sfx_rain.set_volume(0.15)
+            except Exception:
+                pass
+
+        self._sfx_squirrel: pygame.mixer.Sound | None = None
+        self._squirrel_sfx_playing = False
+        _sfx_squirrel_path = os.path.join(os.path.dirname(__file__), "passthegame_audio", "squirrel.mp3")
+        if os.path.exists(_sfx_squirrel_path):
+            try:
+                self._sfx_squirrel = pygame.mixer.Sound(_sfx_squirrel_path)
+            except Exception:
+                pass
+
+        self._sfx_snake: pygame.mixer.Sound | None = None
+        self._snake_sfx_playing = False
+        _sfx_snake_path = os.path.join(os.path.dirname(__file__), "passthegame_audio", "snake.mp3")
+        if os.path.exists(_sfx_snake_path):
+            try:
+                self._sfx_snake = pygame.mixer.Sound(_sfx_snake_path)
+            except Exception:
+                pass
+
         # ── pause menu buttons ────────────────────────────────────────────────
         self._pause_resume_btn = pygame.Rect(SCREEN_W // 2 - 100, SCREEN_H // 2 - 15, 200, 45)
         self._pause_quit_btn = pygame.Rect(SCREEN_W // 2 - 100, SCREEN_H // 2 + 35, 200, 45)
@@ -253,6 +345,27 @@ class Game:
             self._update()
             self._draw()
 
+        self._stop_ambient_sounds()
+
+    def _stop_ambient_sounds(self):
+        if self._sfx_crickets and self._crickets_playing:
+            self._sfx_crickets.stop()
+            self._crickets_playing = False
+        if self._sfx_nature and self._nature_playing:
+            self._sfx_nature.stop()
+            self._nature_playing = False
+        if self._sfx_rain and self._rain_sfx_playing:
+            self._sfx_rain.stop()
+            self._rain_sfx_playing = False
+        if self._sfx_squirrel and self._squirrel_sfx_playing:
+            self._sfx_squirrel.stop()
+            self._squirrel_sfx_playing = False
+        if self._sfx_snake and self._snake_sfx_playing:
+            self._sfx_snake.stop()
+            self._snake_sfx_playing = False
+        if self._sfx_will_die:
+            self._sfx_will_die.stop()
+
     # ── update ────────────────────────────────────────────────────────────────
     def _update(self):
         self.all_sprites.update()
@@ -288,6 +401,51 @@ class Game:
         denominator = max(1, SKY_DAY[0] - SKY_DARK[0])
         self._darkness = max(0.0, min(1.0, (SKY_DAY[0] - self._sky_color[0])/denominator ))
 
+        if self.paused:
+            self._stop_ambient_sounds()
+        else:
+            if self._sfx_crickets:
+                is_night = self._darkness >= 0.5
+                if is_night and not self._crickets_playing:
+                    self._sfx_crickets.play(-1)
+                    self._crickets_playing = True
+                elif not is_night and self._crickets_playing:
+                    self._sfx_crickets.stop()
+                    self._crickets_playing = False
+
+            if self._sfx_nature:
+                if not self._crickets_playing and not self._nature_playing:
+                    self._sfx_nature.play(-1)
+                    self._nature_playing = True
+                elif self._crickets_playing and self._nature_playing:
+                    self._sfx_nature.stop()
+                    self._nature_playing = False
+
+            if self._sfx_rain:
+                raining = any(c.raining for c in self.clouds)
+                if raining and not self._rain_sfx_playing:
+                    self._sfx_rain.play(-1)
+                    self._rain_sfx_playing = True
+                elif not raining and self._rain_sfx_playing:
+                    self._sfx_rain.stop()
+                    self._rain_sfx_playing = False
+
+            if self._sfx_squirrel:
+                if self.squirrel.active and not self._squirrel_sfx_playing:
+                    self._sfx_squirrel.play(-1)
+                    self._squirrel_sfx_playing = True
+                elif not self.squirrel.active and self._squirrel_sfx_playing:
+                    self._sfx_squirrel.stop()
+                    self._squirrel_sfx_playing = False
+
+            if self._sfx_snake:
+                if self.snake.active and not self._snake_sfx_playing:
+                    self._sfx_snake.play(-1)
+                    self._snake_sfx_playing = True
+                elif not self.snake.active and self._snake_sfx_playing:
+                    self._sfx_snake.stop()
+                    self._snake_sfx_playing = False
+
         if not self.paused:
             self._update_world_time(dt)
             self._update_weather(dt)
@@ -299,6 +457,13 @@ class Game:
                 c.update_movement()
 
             self._update_bosses(dt)
+            if self._sfx_lightning:
+                for boss in self._bosses:
+                    prev = self._prev_bolt_flashes.get(id(boss), 0.0)
+                    curr = float(getattr(boss, "_bolt_flash_remaining", 0.0))
+                    if curr > 0.0 and prev == 0.0:
+                        self._sfx_lightning.play()
+                    self._prev_bolt_flashes[id(boss)] = curr
             self._update_critters(dt)
             self._update_plants()
         self.stars.update(dt)
@@ -765,6 +930,18 @@ class Game:
                 growth_rate_bad=PLANT_GROWTH_RATE_BAD * slot_growth_mult,
                 dt=dt,
             )
+
+        if self._sfx_ready_harvest:
+            currently_harvestable = {id(s) for s in self.slots if s.harvestable}
+            if currently_harvestable - self._prev_harvestable:
+                self._sfx_ready_harvest.play()
+            self._prev_harvestable = currently_harvestable
+
+        if self._sfx_will_die:
+            currently_shaking = {id(s) for s in self.slots if s.planted and not s.dead and s.bad_ratio > 0}
+            if currently_shaking - self._prev_shaking:
+                self._sfx_will_die.play()
+            self._prev_shaking = currently_shaking
 
     def _draw_ground(self):
         pygame.draw.rect(self.screen, GROUND_COLOR, self._ground_rect)
@@ -1307,6 +1484,8 @@ class Game:
                 slot.clear()
                 if COMPOST_FROM_DEAD_PLANT > 0:
                     self.inventory[COMPOST_ITEM_NAME] = self.inventory.get(COMPOST_ITEM_NAME, 0) + int(COMPOST_FROM_DEAD_PLANT)
+                if self._sfx_harvest:
+                    self._sfx_harvest.play()
                 return
             if slot and slot.harvestable:
                 self._harvest(slot)
@@ -1686,6 +1865,8 @@ class Game:
         if not self._pay_for_seed(seed):
             return
         slot.plant(seed)
+        if self._sfx_plant:
+            self._sfx_plant.play()
 
     def _apply_tool_to_slot(self, slot: PlantSlot, tool_id: str) -> None:
         if tool_id == TOOL_COMPOST:
@@ -1699,6 +1880,8 @@ class Game:
             else:
                 self.inventory[COMPOST_ITEM_NAME] = have - 1
             slot.apply_compost(COMPOST_BOOST_SECONDS)
+            if self._sfx_plant:
+                self._sfx_plant.play()
             return
 
         if tool_id == TOOL_SCARECROW:
@@ -1712,6 +1895,8 @@ class Game:
                 return
             self.money -= int(SCARECROW_COST)
             slot.place_scarecrow(SCARECROW_DURATION_SECONDS)
+            if self._sfx_plant:
+                self._sfx_plant.play()
             return
 
         if tool_id == TOOL_LIGHTNING_ROD:
@@ -1722,6 +1907,8 @@ class Game:
                 return
             self.money -= int(LIGHTNING_ROD_COST)
             slot.add_lightning_rod_charges(LIGHTNING_ROD_CHARGES)
+            if self._sfx_plant:
+                self._sfx_plant.play()
             return
 
     def _harvest(self, slot: PlantSlot):
@@ -1729,7 +1916,8 @@ class Game:
             return
         name = slot.seed.product_name
         self.inventory[name] = self.inventory.get(name, 0) + slot.seed.harvest_yield
-        # SFX removed: no-op here (placeholder for future audio)
+        if self._sfx_harvest:
+            self._sfx_harvest.play()
         if slot.seed.regrow_to_stage is None:
             slot.clear()
         else:
