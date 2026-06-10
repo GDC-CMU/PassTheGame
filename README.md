@@ -162,6 +162,12 @@ Add your name and 1–2 lines about what you added below.
   Show how soon they are until they can sell their plant with progress bar
   Added in-game help: seed/tool hover descriptions, Save button tip, and Sell All error feedback.
 
+- **Mohammed**
+  Made a more interactive homescreen by adding props, animated components, and background music that can be toggled on/off.
+  Introduced all the audio components/cues in the game, including planting, harvesting, night/day audio, critter alerts, plant warnings, and boss strikes.
+  Made a new directory in the project called passthegame_audio/ that includes all the audio files
+
+
 
 ---
 

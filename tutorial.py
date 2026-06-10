@@ -155,10 +155,13 @@ class Tutorial(Game):
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    self._stop_ambient_sounds()
                     return "quit"
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    self._stop_ambient_sounds()
                     return "menu"
                 if self._main_menu_button_clicked(event):
+                    self._stop_ambient_sounds()
                     return "menu"
 
                 if self._intercept_event(event):
@@ -178,6 +181,7 @@ class Tutorial(Game):
             self._draw()
 
             if self.tut_step == TUT_STEP_EXIT:
+                self._stop_ambient_sounds()
                 return "menu"
 
     def _intercept_event(self, event):
