@@ -23,9 +23,21 @@ from settings import (
     STORM_TITAN_REWARD_ITEM_COUNT,
     STORM_TITAN_LIGHTNING_KILLS_PLANT,
     STORM_TITAN_IMAGE_FILENAME,
-    PERFECT_BLOCK_WINDOW_SECONDS,
+    STORM_TITAN_SALT_SECONDS,
+    STORM_TITAN_NODAMAGE_BONUS_ITEM_NAME,
+    STORM_TITAN_NODAMAGE_BONUS_ITEM_COUNT,
+    PERFECT_BLOCK_TOLERANCE_PX,
     PERFECT_BLOCK_BONUS_DAMAGE,
+    PERFECT_BLOCK_RING_MAX_RADIUS,
+    PERFECT_BLOCK_RING_MIN_RADIUS,
+    PERFECT_BLOCK_RING_WIDTH,
+    PERFECT_BLOCK_RING_COLOR,
+    BOSS_COMBO_THRESHOLD,
+    BOSS_COMBO_DAMAGE_BONUS,
+    BOSS_DIFFICULTY_HP_PER_LEVEL,
+    BOSS_DIFFICULTY_SPAWN_MULT_PER_LEVEL,
 )
+from items import ITEMS
 
 PROPS_DIR = os.path.join(os.path.dirname(__file__), "props")
 
@@ -72,6 +84,11 @@ class StormTitanConfig:
     health_bar_width: int = 360
     health_bar_height: int = 18
 
+    # Unblocked-hit soil salt + clean-fight (no-damage) bonus reward.
+    salt_seconds: float = STORM_TITAN_SALT_SECONDS
+    no_damage_bonus_item_name: str = STORM_TITAN_NODAMAGE_BONUS_ITEM_NAME
+    no_damage_bonus_item_count: int = STORM_TITAN_NODAMAGE_BONUS_ITEM_COUNT
+
 
 class StormTitan(pygame.sprite.Sprite):
     """Storm Titan boss.
@@ -88,6 +105,35 @@ class StormTitan(pygame.sprite.Sprite):
     STATE_WAITING = "waiting"
     STATE_ACTIVE = "active"
     STATE_RETREATING = "retreating"
+
+    # Identity (used by HUD labels and the progression system's SURVIVE_BOSS).
+    boss_id = "storm"
+    display_name = "Storm Titan"
+    # The shared lightning SFX should only fire for lightning bosses.
+    plays_lightning_sfx = True
+
+    # Procedural animation tuning. These drive squash/stretch game-feel on the
+    # single idle sprite: a calm idle bob, an anticipation swell during the
+    # warning, and a quick lunge when the strike lands. Subclasses inherit these
+    # and may override any of them.
+    #
+    # Idle: a slow vertical bob and a gentler horizontal sway, a few pixels each.
+    ANIM_IDLE_BOB_PX = 3.0
+    ANIM_IDLE_BOB_PERIOD = 2.6
+    ANIM_IDLE_SWAY_PX = 2.0
+    ANIM_IDLE_SWAY_PERIOD = 3.7
+    # Windup: the body swells and rears upward while the strike charges.
+    ANIM_WINDUP_SCALE = 1.08          # peak size right before the strike
+    ANIM_WINDUP_STRETCH = 0.05        # extra vertical rear-up near the peak
+    ANIM_WINDUP_RISE_PX = 6.0         # how far it pulls up while charging
+    ANIM_CHARGE_TINT = 0.18           # brightness pulled from warning_color
+    # Strike: a short lunge toward the target plus a scale pop, then it settles.
+    ANIM_STRIKE_POP_SECONDS = 0.22
+    ANIM_STRIKE_POP_SCALE = 1.12
+    ANIM_STRIKE_LUNGE_PX = 14.0
+    # Retreat: a gentle shrink layered on top of the existing fade.
+    ANIM_RETREAT_SHRINK = 0.12
+    ANIM_RETREAT_ALPHA = 150
 
     def __init__(
         self,
@@ -109,9 +155,17 @@ class StormTitan(pygame.sprite.Sprite):
         self._target_x: float | None = None
 
         self._state = self.STATE_WAITING
-        self._hp = int(self.config.max_hp)
 
-        self._spawn_remaining = float(self.config.spawn_every_seconds)
+        # Escalation hook (neutral defaults == current behavior); an external
+        # progression system tunes these via set_difficulty()/enabled.
+        self.enabled = True
+        self._difficulty_level = 1
+        self._hp_scale = 1.0
+        self._spawn_scale = 1.0
+
+        self._hp = self.max_hp
+
+        self._spawn_remaining = float(self.config.spawn_every_seconds) * self._spawn_scale
         self._cooldown_remaining = 0.0
         self._warning_remaining = 0.0
         self._retreat_remaining = 0.0
@@ -122,6 +176,32 @@ class StormTitan(pygame.sprite.Sprite):
         self._bolt_points: list[tuple[int, int]] | None = None
 
         self._pending_reward = 0
+        self._pending_bonus: list[tuple[str, int]] = []  # clean-fight rewards
+
+        # Combat tracking (combo + clean-fight bonus).
+        self._block_combo = 0
+        self._took_unblocked_hit = False
+        self._last_perfect_at: float | None = None
+        # Outcome of the most recent strike: "perfect", "block", or "hit". Read by
+        # the game on the bolt-flash frame to differentiate impact feedback.
+        self._last_strike_result: str | None = None
+        self._last_perfect_pos: tuple[int, int] | None = None  # where a perfect block landed
+
+        # Monotonic event counters drained by the progression/Almanac system.
+        self._blocks_since_poll = 0
+        self._survived_since_poll = 0
+        self._unblocked_hits_since_poll: list[int] = []
+
+        # Procedural-animation state (purely cosmetic; never touches combat).
+        # A stable per-boss phase keeps the three titans from bobbing in lockstep
+        # without drawing from self._rng (so combat target/bolt rolls are
+        # unchanged and deterministic).
+        self._anim_clock = 0.0
+        self._anim_phase = (sum(ord(c) for c in self.boss_id) % 360) * math.tau / 360.0
+        self._strike_pop_remaining = 0.0
+        self._anim_prev_bolt_flash = 0.0
+        self._anim_frame_cache: tuple[tuple[int, int, int, int], pygame.Surface] | None = None
+        self._anim_debug: dict | None = None  # last transform, for headless tests
 
     # ── status ──────────────────────────────────────────────────────────────
     @property
@@ -134,7 +214,7 @@ class StormTitan(pygame.sprite.Sprite):
 
     @property
     def max_hp(self) -> int:
-        return self.config.max_hp
+        return max(1, int(round(self.config.max_hp * self._hp_scale)))
 
     @property
     def visible(self) -> bool:
@@ -150,10 +230,13 @@ class StormTitan(pygame.sprite.Sprite):
 
     # ── battle logic ─────────────────────────────────────────────────────────
     def update_battle(self, dt: float, *, slots: Sequence[object], clouds: Iterable[object]) -> None:
+        self._advance_anim(dt)
         if dt <= 0.0:
             return
 
         if self._state == self.STATE_WAITING:
+            if not self.enabled:
+                return
             self._spawn_remaining -= dt
             if self._spawn_remaining <= 0.0:
                 self._begin_fight()
@@ -230,12 +313,43 @@ class StormTitan(pygame.sprite.Sprite):
             return
         self._spawn_remaining = max(0.0, self._spawn_remaining - dt)
 
-    def pop_reward(self) -> tuple[str, int] | None:
-        if self._pending_reward <= 0:
-            return None
-        count = self._pending_reward
-        self._pending_reward = 0
-        return (self.config.reward_item_name, count)
+    def pop_reward(self) -> list[tuple[str, int]]:
+        out: list[tuple[str, int]] = []
+        if self._pending_reward > 0:
+            out.append((self.config.reward_item_name, int(self._pending_reward)))
+            self._pending_reward = 0
+        if self._pending_bonus:
+            out.extend(self._pending_bonus)
+            self._pending_bonus = []
+        return out
+
+    def set_difficulty(self, level: int) -> None:
+        """Progression hook. Level 1 == current tuning; scales max HP (applied at
+        the next fight) and spawn cadence (applied at the next wait)."""
+        level = max(1, int(level))
+        self._difficulty_level = level
+        self._hp_scale = 1.0 + float(BOSS_DIFFICULTY_HP_PER_LEVEL) * (level - 1)
+        self._spawn_scale = float(BOSS_DIFFICULTY_SPAWN_MULT_PER_LEVEL) ** (level - 1)
+
+    def pop_blocks(self) -> int:
+        n = self._blocks_since_poll
+        self._blocks_since_poll = 0
+        return n
+
+    def pop_survived(self) -> int:
+        n = self._survived_since_poll
+        self._survived_since_poll = 0
+        return n
+
+    def pop_unblocked_hits(self) -> list[int]:
+        """Slot indices struck by an unblocked hit since the last poll (for blight)."""
+        hits = self._unblocked_hits_since_poll
+        self._unblocked_hits_since_poll = []
+        return hits
+
+    @property
+    def block_combo(self) -> int:
+        return self._block_combo
 
     def force_spawn_now(self) -> None:
         """Cheat/debug helper: force the boss to appear immediately."""
@@ -254,12 +368,134 @@ class StormTitan(pygame.sprite.Sprite):
         if not self.visible:
             return
 
-        if self._state == self.STATE_RETREATING:
-            tmp = self.image.copy()
-            tmp.set_alpha(150)
-            surface.blit(tmp, self.rect)
+        anim = self._compute_anim()
+        self._anim_debug = anim  # exposed for the headless animation harness
+
+        base_w, base_h = self.image.get_size()
+        sw = max(1, int(round(base_w * anim["scale_x"])))
+        sh = max(1, int(round(base_h * anim["scale_y"])))
+        tint = anim["tint"]
+        alpha = anim["alpha"]
+
+        # Fast path: plain idle bob with no scaling, tint or fade -> blit the
+        # source straight (never mutated), just offset.
+        if sw == base_w and sh == base_h and tint <= 0.0 and alpha >= 255:
+            frame = self.image
         else:
-            surface.blit(self.image, self.rect)
+            frame = self._anim_frame(sw, sh, tint, alpha)
+
+        # Recenter on self.rect so scaling stays centered; self.rect itself is
+        # left untouched, keeping collision/targeting stable.
+        draw_rect = frame.get_rect()
+        draw_rect.center = (
+            self.rect.centerx + int(round(anim["off_x"])),
+            self.rect.centery + int(round(anim["off_y"])),
+        )
+        surface.blit(frame, draw_rect)
+
+    def _advance_anim(self, dt: float) -> None:
+        """Advance the cosmetic animation clock and strike-lunge timer.
+
+        Called once per frame from update_battle (including the Drought override)
+        before any combat work, so it stays in sync with dt and never alters
+        gameplay state.
+        """
+        if dt > 0.0:
+            self._anim_clock += dt
+            if self._strike_pop_remaining > 0.0:
+                self._strike_pop_remaining = max(0.0, self._strike_pop_remaining - dt)
+        # A fresh bolt flash is the tell that a strike just resolved (every
+        # subclass sets _bolt_flash_remaining inside _resolve_strike). Detecting
+        # the rising edge here means we trigger the lunge without touching any
+        # combat code.
+        if self._bolt_flash_remaining > self._anim_prev_bolt_flash + 1e-6:
+            self._strike_pop_remaining = float(self.ANIM_STRIKE_POP_SECONDS)
+        self._anim_prev_bolt_flash = self._bolt_flash_remaining
+
+    def _compute_anim(self) -> dict:
+        """Resolve the current frame's transform from the animation clock and the
+        state machine. Returns scale, pixel offset, tint strength and alpha."""
+        clock = self._anim_clock
+        phase = self._anim_phase
+
+        # Idle bob/sway: always on so the titan never looks frozen.
+        bob = math.sin(clock * math.tau / self.ANIM_IDLE_BOB_PERIOD + phase) * self.ANIM_IDLE_BOB_PX
+        sway = math.sin(clock * math.tau / self.ANIM_IDLE_SWAY_PERIOD + phase) * self.ANIM_IDLE_SWAY_PX
+
+        scale_x = 1.0
+        scale_y = 1.0
+        off_x = sway
+        off_y = bob
+        tint = 0.0
+        alpha = 255
+
+        # Windup anticipation: ramp 0 -> 1 across the warning window, swelling and
+        # rearing up so a strike clearly reads as incoming.
+        if self._state == self.STATE_ACTIVE and self._warning_remaining > 0.0:
+            warn_total = max(0.001, float(self.config.strike_warning_seconds))
+            p = max(0.0, min(1.0, 1.0 - self._warning_remaining / warn_total))
+            ease = p * p  # slow build, snappier as the strike nears
+            swell = 1.0 + (self.ANIM_WINDUP_SCALE - 1.0) * ease
+            scale_x *= swell * (1.0 - self.ANIM_WINDUP_STRETCH * 0.5 * ease)
+            scale_y *= swell * (1.0 + self.ANIM_WINDUP_STRETCH * ease)
+            off_y -= self.ANIM_WINDUP_RISE_PX * ease
+            tint = self.ANIM_CHARGE_TINT * ease
+
+        # Strike: a brief lunge toward the target plus a scale pop that decays
+        # over ANIM_STRIKE_POP_SECONDS, then settles back to idle.
+        if self._strike_pop_remaining > 0.0:
+            q = max(0.0, min(1.0, self._strike_pop_remaining / float(self.ANIM_STRIKE_POP_SECONDS)))
+            pop = (self.ANIM_STRIKE_POP_SCALE - 1.0) * q
+            scale_y *= 1.0 + pop
+            scale_x *= 1.0 - pop * 0.5
+            off_y += self.ANIM_STRIKE_LUNGE_PX * q
+            tint = max(tint, self.ANIM_CHARGE_TINT * q)
+
+        # Retreat: keep the existing fade and add a gentle shrink as it leaves.
+        if self._state == self.STATE_RETREATING:
+            alpha = int(self.ANIM_RETREAT_ALPHA)
+            total = max(0.001, float(self.config.retreat_seconds))
+            pr = max(0.0, min(1.0, 1.0 - self._retreat_remaining / total))
+            shrink = 1.0 - self.ANIM_RETREAT_SHRINK * pr
+            scale_x *= shrink
+            scale_y *= shrink
+
+        return {
+            "scale_x": scale_x,
+            "scale_y": scale_y,
+            "off_x": off_x,
+            "off_y": off_y,
+            "tint": tint,
+            "alpha": alpha,
+        }
+
+    def _anim_frame(self, sw: int, sh: int, tint: float, alpha: int) -> pygame.Surface:
+        """Build (and cache) a transformed copy of self.image. Never mutates the
+        source surface."""
+        tint_level = int(round(max(0.0, tint) * 12.0))  # quantize to keep the cache useful
+        alpha_level = max(0, min(255, int(alpha)))
+        key = (int(sw), int(sh), tint_level, alpha_level)
+
+        cached = self._anim_frame_cache
+        if cached is not None and cached[0] == key:
+            return cached[1]
+
+        if (sw, sh) == self.image.get_size():
+            frame = self.image.copy()
+        else:
+            frame = pygame.transform.smoothscale(self.image, (sw, sh))
+
+        if tint_level > 0:
+            amount = tint_level / 12.0
+            wc = self.config.warning_color
+            add = (int(wc[0] * amount), int(wc[1] * amount), int(wc[2] * amount), 0)
+            frame.fill(add, special_flags=pygame.BLEND_RGB_ADD)
+
+        if alpha_level < 255:
+            frame.set_alpha(alpha_level)
+
+        self._anim_frame_cache = (key, frame)
+        return frame
 
     def draw_bolt(self, surface: pygame.Surface) -> None:
         if not self.visible:
@@ -287,18 +523,31 @@ class StormTitan(pygame.sprite.Sprite):
         if not isinstance(rect, pygame.Rect):
             return
 
-        pygame.draw.rect(surface, self.config.warning_color, rect.inflate(6, 6), 3, border_radius=6)
+        # Shrinking reticle: the ring collapses onto the lock zone exactly at the
+        # strike, teaching the player to center a cloud inside it as it locks.
+        warn_total = max(0.001, float(self.config.strike_warning_seconds))
+        p = max(0.0, min(1.0, 1.0 - self._warning_remaining / warn_total))  # 0 -> 1
+        r_max, r_min = int(PERFECT_BLOCK_RING_MAX_RADIUS), int(PERFECT_BLOCK_RING_MIN_RADIUS)
+        radius = int(r_min + (r_max - r_min) * (1.0 - p))
+        wc, lc = self.config.warning_color, PERFECT_BLOCK_RING_COLOR
+        color = tuple(int(wc[i] + (lc[i] - wc[i]) * p) for i in range(3))
+        cx, cy = rect.center
+        pygame.draw.circle(surface, color, (cx, cy), r_min, 1)  # static lock zone
+        pygame.draw.circle(surface, color, (cx, cy), radius, int(PERFECT_BLOCK_RING_WIDTH))
+        pygame.draw.rect(surface, self.config.warning_color, rect.inflate(6, 6), 2, border_radius=6)
 
     # ── internals ───────────────────────────────────────────────────────────
     def _begin_fight(self) -> None:
         self._state = self.STATE_ACTIVE
-        self._hp = int(self.config.max_hp)
+        self._hp = self.max_hp
         self._cooldown_remaining = 0.5
         self._warning_remaining = 0.0
         self._target_slot_index = None
         self._target_x = None
         self._bolt_flash_remaining = 0.0
         self._bolt_points = None
+        self._block_combo = 0
+        self._took_unblocked_hit = False
 
     def _begin_retreat(self) -> None:
         self._state = self.STATE_RETREATING
@@ -307,12 +556,22 @@ class StormTitan(pygame.sprite.Sprite):
         self._warning_remaining = 0.0
         self._target_slot_index = None
         self._target_x = None
+        # Clear any in-flight strike bolt so it does not linger on screen through
+        # the whole retreat (the retreat state skips the per-frame bolt decay).
+        self._bolt_flash_remaining = 0.0
+        self._bolt_points = None
         if self.config.reward_item_count > 0:
             self._pending_reward += int(self.config.reward_item_count)
+        # Clean fight: defeated without losing a single plant → bonus reward.
+        if not self._took_unblocked_hit and int(self.config.no_damage_bonus_item_count) > 0:
+            self._pending_bonus.append(
+                (self.config.no_damage_bonus_item_name, int(self.config.no_damage_bonus_item_count))
+            )
+        self._survived_since_poll += 1
 
     def _reset_to_waiting(self) -> None:
         self._state = self.STATE_WAITING
-        self._spawn_remaining = float(self.config.spawn_every_seconds)
+        self._spawn_remaining = float(self.config.spawn_every_seconds) * self._spawn_scale
         self._cooldown_remaining = 0.0
         self._warning_remaining = 0.0
         self._retreat_remaining = 0.0
@@ -320,6 +579,16 @@ class StormTitan(pygame.sprite.Sprite):
         self._target_x = None
         self._bolt_flash_remaining = 0.0
         self._bolt_points = None
+        self._block_combo = 0
+        self._took_unblocked_hit = False
+
+    def _slot_value(self, slot) -> int:
+        seed = getattr(slot, "seed", None)
+        if seed is None:
+            return 0
+        item = ITEMS.get(getattr(seed, "product_name", None))
+        price = int(getattr(item, "sell_price", 0)) if item else 0
+        return price * max(1, int(getattr(seed, "harvest_yield", 1)))
 
     def _choose_target(self, slots: Sequence[object]) -> None:
         candidates: list[int] = []
@@ -334,7 +603,15 @@ class StormTitan(pygame.sprite.Sprite):
             self._target_slot_index = None
             return
 
-        self._target_slot_index = self._rng.choice(candidates)
+        # Target the player's most valuable planted slot (random tie-break, and
+        # random fallback if values are unavailable).
+        values = [self._slot_value(slots[i]) for i in candidates]
+        best = max(values)
+        if best <= 0:
+            self._target_slot_index = self._rng.choice(candidates)
+            return
+        top = [i for i, v in zip(candidates, values) if v == best]
+        self._target_slot_index = self._rng.choice(top)
 
     def _get_valid_target_slot(self, slots: Sequence[object]):
         if self._target_slot_index is None:
@@ -408,27 +685,28 @@ class StormTitan(pygame.sprite.Sprite):
         self._bolt_points = bolt_points
 
         if blocking_cloud is not None:
-            # Check for a "perfect block" — cloud started blocking shortly before strike.
-            is_perfect = False
-            try:
-                last = getattr(blocking_cloud, "_last_rain_toggled_at", None)
-                if last is not None:
-                    now = pygame.time.get_ticks() / 1000.0
-                    if now - float(last) <= float(PERFECT_BLOCK_WINDOW_SECONDS):
-                        is_perfect = True
-            except Exception:
-                is_perfect = False
-            damage = 1 + int(PERFECT_BLOCK_BONUS_DAMAGE) if is_perfect else 1
+            # Position-based perfect block: the blocking cloud is centered on the
+            # target at strike time (skill, not rain-toggle timing).
+            is_perfect = abs(int(blocking_cloud.rect.centerx) - x) <= int(PERFECT_BLOCK_TOLERANCE_PX)
+            self._last_strike_result = "perfect" if is_perfect else "block"
+            if is_perfect:
+                self._last_perfect_pos = (int(blocking_cloud.rect.centerx), int(blocking_cloud.rect.bottom))
+            damage = 1
+            if is_perfect:
+                damage += int(PERFECT_BLOCK_BONUS_DAMAGE)
+                self._last_perfect_at = pygame.time.get_ticks() / 1000.0
+            self._block_combo += 1
+            if self._block_combo >= int(BOSS_COMBO_THRESHOLD):
+                damage += int(BOSS_COMBO_DAMAGE_BONUS)
+            self._blocks_since_poll += 1
             self._hp = max(0, self._hp - int(damage))
-            # expose perfect-block timing for HUD feedback
-            try:
-                if is_perfect:
-                    self._last_perfect_at = pygame.time.get_ticks() / 1000.0
-            except Exception:
-                pass
             if self._hp <= 0:
                 self._begin_retreat()
         else:
+            self._block_combo = 0
+            self._took_unblocked_hit = True
+            self._last_strike_result = "hit"
+            self._unblocked_hits_since_poll.append(int(target_index))
             if self.config.lightning_kills_plant:
                 radius = max(0, int(getattr(self.config, "aoe_radius_slots", 0)))
                 for idx in range(target_index - radius, target_index + radius + 1):
@@ -440,15 +718,17 @@ class StormTitan(pygame.sprite.Sprite):
         self._target_x = None
         self._cooldown_remaining = float(self.config.strike_cooldown_seconds)
 
-    @staticmethod
-    def _kill_slot(slot: object) -> None:
+    def _kill_slot(self, slot: object) -> None:
         if getattr(slot, "seed", None) is None:
             return
         if getattr(slot, "dead", False):
             return
         strike_fn = getattr(slot, "strike_lightning", None)
         if callable(strike_fn):
-            strike_fn()
+            try:
+                strike_fn(salt_seconds=float(self.config.salt_seconds))
+            except TypeError:
+                strike_fn()  # older signature without salt
             return
         # Fallback for older PlantSlot shapes
         try:

@@ -16,3 +16,16 @@ Thumbs.db
 
 # Local save data
 savegame.json
+
+# Test + smoke scratch saves
+.test_saves/
+copilot_smoke_save.json
+
+# Marketing: keep only the final deliverables; ignore scratch stills, iteration archives, and fonts
+marketing/*
+!marketing/logo.png
+!marketing/banner.png
+!marketing/trailer.mp4
+
+# Local-only dev tooling (asset and marketing generators). Remove this line to version it.
+tools/
