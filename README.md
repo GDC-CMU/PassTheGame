@@ -1,174 +1,215 @@
-# Welcome to Game Dev Club Pass the Game challenge
+<p align="center">
+  <img src="marketing/logo.png" alt="Pass the Game - Farm Patch" width="860">
+</p>
 
-This is a collaborative game dev experiment where one game gets passed around and evolves with every contributor. You take the game, add your twist, and pass it on. Simple as that.
+# Pass the Game
 
-## How it works
+A Python 3.9+ / pygame cozy farming-defense hybrid built by CMU Game Dev Club.
 
-1. Clone or pull the repository
-2. Create a new branch for your changes (call it your name)
-3. Do your thing
-   - Add a feature (can range from something very simple to some enormous 2GBs of code)
-   - Improve something
-   - Break something and fix it better
-   - Be creative
-4. Push your branch
-5. Open a pull request
-6. Once it is approved, it gets merged into the main game
-7. Pull again later and see how the game has changed  (optional)
+## What this is
 
-That is it. Keep it fun and keep it moving.
+You manage a 10-slot farm with two movable clouds, one sun, and crops that only thrive inside their own water and sun bands. The right cloud uses Arrow keys. The left cloud uses WASD. Click a cloud to cycle rain Off, Light, and Heavy.
 
-For the practical "how do I actually open a PR" details, see [CONTRIBUTING.md](CONTRIBUTING.md).
+The puzzle is farming under pressure: keep crops in band, harvest them into Inventory, sell produce, unlock Market licenses, and survive thieves, crows, mini-bosses, and five Titans.
 
-## Rules and guidelines
+## Features
 
-- Keep your changes reasonable so others can build on them
-- Write comments as if you are talking to the next person
-- Make sure the game still runs
-- Do not overwrite someone else's work unless you are improving it
-- Have fun with it
-- Make a before-after video of how you evolved the game (*Completely optional, for fun purposes only*)
-
-## Tech
-
-- Language: Python 3.9+
-- Library: pygame 2.5+
+- 10 plant slots with per-crop water and sun bands.
+- Two independent clouds for shade and rain control.
+- 18 crops, including keystone crops Fern, Reed, Clover, Orchid, Lightning Vine, and the Everbloom quest crop.
+- Carrot and Clover are forgiving starters, but their soil dries out enough that Golden harvests still need watering.
+- Golden crops when a plant spends most of its life in band. Golden produce sells for 2x.
+- Five Titans: Storm, Cyclone, Drought, Frost, and the finale Inferno Titan.
+- Year's End Tempest in Winter, with faster Titan timers and an Inferno opener once difficulty reaches 4.
+- Early-game grace that ramps threats up over the first weeks and years instead of swarming new players.
+- Daily 5g stipend so a wiped-out farm can recover.
+- Ground thieves, flying crows, five mini-bosses, and helpful bees.
+- Market progression for seed licenses, rare seed offers, and tool unlocks as related threats appear.
+- Tools: Compost, Scarecrow, Lightning Rod, and Bell.
+- Hireable auto-harvester worker and Prime harvest timing.
+- Almanac goals, yearly report card, Legacy %, Next-Year preview, challenge ladder, and Everbloom quest.
+- Rewritten 12-step tutorial that uses an isolated save path. It never reads or writes `savegame.json`.
+- Particle juice, parallax mountains, day-night visuals, ambient loops, and sound effects.
+- Auto-save every 2 minutes plus manual Save.
 
 ## How to run
 
 ```bash
-# (optional but recommended) create a virtual environment
-python -m venv venv
-source venv/bin/activate        # on Windows: venv\Scripts\activate
-
+python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python main.py
+python3 main.py                 # Windows may use: py -3 main.py
 ```
 
-## Farming notes
-- Sprites are optional; the game draws placeholders if files are missing.
-- Plant stats and sprite filenames live in `plants.py`.
-- Item sell prices live in `items.py`.
-
-## Adding a new plant
-1. Add a new subclass in `plants.py` with its stats, icon, and phase sprites.
-2. Register the plant by adding an instance to `Game.seeds` in `game.py`.
-3. (Optional) Add its item price to `items.py` if it produces a new product.
-4. Drop any new sprites into `props/` and list them in `props/README.md`.
-
-## Customizing a plant
-use following optional class attributes for your PlantType subclass
-- harvest_yield — num of items produced per harvest (default is 1)
-- regrow_to_stage — if set, plant resets to this stage after harvest instead of being cleared. Useful for re-fruiting plants (default is None)
-- sprite_w, sprite_h — custom sprite width, height in px (default is None, falls back to `PLANT_SPRITE_W`/`PLANT_SPRITE_H` from settings.py)
-
+The game is fullscreen by default because `GAME_FULLSCREEN = True` in `settings.py`.
+Set it to `False` if you want the scaled 1200x600 window instead.
 
 ## Controls
-- Arrow keys: move first cloud
-- WASD: move second cloud
-- Click cloud: toggle rain
-- Drag or click seed to plant
-- Click harvestable plant to collect
-- Click dead plant to clear
-- P: pause / resume (animations keep playing)
-- Main Menu button (top-right of the field) or ESC: return to main menu
-- B: (cheat) toggle Storm Titan spawn / despawn
-- C: (cheat) toggle Cyclone Titan spawn / despawn
-- V: (cheat) force-spawn the chipmunk thief
-- N: (cheat) force-spawn the snake thief
-- Click a critter: scare it away
 
-## Boss fights + critters
+### Farming and menus
 
-### Storm Titan
-- Spawns **twice per in-game week** (cadence is tunable in `settings.py`).
-- Targets a planted slot, shows a warning, then strikes lightning.
-- **Block the strike** by moving any cloud to cover the target x-position. If blocked, the lightning reflects and damages the boss (**5 hits** defeats it).
-- On defeat it lingers briefly, then leaves, and drops a **Storm Seed** (plantable reward).
+- Arrow keys: move the right cloud.
+- WASD: move the left cloud.
+- Click a cloud: cycle rain Off, Light, Heavy.
+- Click a seed in the panel: select it. Click an empty slot to plant it.
+- Drag a seed from the panel to a slot: plant it.
+- Click a harvestable crop: harvest it into Inventory.
+- Click a dead crop: clear it and gain Compost salvage.
+- Click an Inventory item row: sell one item.
+- Right-click an Inventory item row: sell the whole stack.
+- E: open or close Inventory.
+- M: open or close Market.
+- J: open or close Almanac. Also dismisses the yearly report card.
+- P: pause or resume.
+- ESC: close an overlay, or return to the main menu.
+- Enter, Space, ESC, or J: dismiss the yearly report card.
+- Main Menu button: return to the main menu.
 
-### Cyclone Titan
-- Spawns **once per in-game week**.
-- Bigger boss with a bigger health bar.
-- Unblocked strikes one-shot plants and also hit nearby slots (AoE).
+### Defense
 
-### Plant thieves (critters)
-- Chipmunk thief + snake thief can spawn from either side and try to eat a planted slot (then the plant is removed).
-- Clicking a thief scares it into fleeing off-screen.
+- Click Squirrel, Snake, crows, Burrow Mole, Locust Pair, or the Tangle Vine root to scare or counter them.
+- Move a cloud over Glare Mote or Chill Wisp danger zones to counter them.
+- Move a cloud over a Titan warning marker to block the strike.
+- T: ring the Bell. Costs 8g and has a cooldown.
+- H: hire the worker when you can afford it.
+- Click tool buttons in the panel, then click a slot to use Compost, Scarecrow, or Lightning Rod.
+
+### Debug keys
+
+These are live in normal gameplay and are useful for testing.
+
+- Shift+M: add 500 money.
+- U: unlock all seeds and tools, plus grant +5 Storm Crystal and +5 Compost.
+- B: toggle Storm Titan.
+- C: toggle Cyclone Titan.
+- X: toggle Drought Titan.
+- F: toggle Frost Titan.
+- I: toggle Inferno Titan.
+- 1: force Burrow Mole.
+- 2: force Locust Pair.
+- 3: force Glare Mote.
+- 4: force Tangle Vine.
+- G: force a crow.
+- V: force Squirrel.
+- N: force Snake.
+- O: force Prime timers on current crops.
+
+## How to play
+
+### Farm the bands
+
+Every crop has a healthy water band and sun band. Clouds shade crops and, when raining, add water. Clear sky adds sun and dries plants out. Growth is best while a crop is in range. Bad conditions can kill a plant.
+
+Some crops change the layout puzzle:
+
+- Sunflower warms its neighbors when ripe.
+- Fern shades its neighbors when ripe.
+- Reed waters its neighbors when ripe.
+- Clover is cheap, pollinatable, and needs enough rain to finish Golden.
+- Moonpetal only grows at night.
+- Mushroom can spread to an empty neighbor when harvested.
+- Lightning Vine grows faster while a boss is active and can surge from lightning.
+- Orchid and Everbloom have tight bands and need attention.
+
+### Handle Titans
+
+Titans target valuable crops when they can. Their HP and spawn cadence scale with Almanac difficulty. Difficulty climbs each year up to a high safety cap, so normal play keeps getting harder. A perfect block gives bonus damage, and block combos add more damage.
+
+- Storm Titan targets one slot. Cover the marked x-position with any cloud.
+- Cyclone Titan targets one slot plus adjacent slots. It requires a raining cloud to block.
+- Drought Titan attacks through the sun. Cover the sun with a cloud during the warning.
+- Frost Titan marks multiple planted slots. Each mark is checked separately. Unblocked marks freeze growth instead of killing.
+- Inferno Titan unlocks at difficulty 4. It cycles Storm, Cyclone, Drought, Frost, then its own fire phase, alternating Firestorm multi-marks and Lava strikes.
+
+Winter brings the Year's End Tempest, where Titan spawn timers run faster. Once Inferno is unlocked, it opens the Tempest. The year ends with a report card and a preview of next year's difficulty.
+
+### Use the Market loop
+
+Tools start locked. The Market unlocks tool licenses after the related threat appears:
+
+- Crop death unlocks Compost offers.
+- Ground critters unlock Scarecrow offers.
+- Lightning threats unlock Lightning Rod offers.
+- Flying crows unlock Bell offers.
+
+The Market also sells seed licenses as your total earnings rise and can feature rare locked seeds. Everbloom appears through its Legacy quest. You also get a 5g daily stipend so a wiped-out farm can recover.
+
+### Deal with pests and helpers
+
+Squirrels and snakes walk in from the sides and steal plants unless clicked or blocked by scarecrows. Crows fly in, can steal crops, and when enough are active they gang up on scarecrows. The Bell scares off active flying crows for 8g.
+
+Mini-bosses are short reaction tests:
+
+- Burrow Mole salts a slot unless clicked.
+- Locust Pair clears crops unless both locusts are clicked.
+- Glare Mote overheats a sun-lover unless the column is shaded.
+- Chill Wisp freezes growth across a band unless covered by clouds.
+- Tangle Vine pins the nearest cloud for about 3.5 seconds unless its root is clicked three times.
+
+Bees are helpers, not pests. During calm daylight they visit flowering crops such as Tomato, Apple, Pumpkin, Sunflower, Clover, and Everbloom. A bee only boosts a crop that is already in its healthy band.
+
+### Worker, Prime, and Legacy
+
+The worker auto-harvests ripe crops into Inventory after being hired. Ripe crops also enter Prime: harvest soon for extra value, wait too long and the crop spoils. Legacy tracks long-term completion through crop discovery, Titan survival, golden harvests, best year, money milestones, and challenges. Everbloom unlocks through that endgame quest and still follows normal water and sun rules.
+
+## Audio and assets
+
+- Image assets live in `props/` and are listed in `props/README.md`.
+- Sound assets live in `passthegame_audio/`.
+- `passthegame_audio/SOURCES.md` lists the CC0 sources for the generated sound effects.
+
+Current audio covers UI clicks/open/close/errors, purchases, tool placement, worker hire, boss spawn/block/perfect, critter spawn/scare/steal, bees, crows, mini-boss spawn/counter/fail, new day, and report card cues, plus ambience and legacy sound files.
 
 ## Project structure
 
-```
-pass_the_game/
-│
-├── main.py          # entry point – init pygame, create Game, run loop
-├── game.py          # Game class – main loop, update, draw
-├── cloud.py         # Cloud sprite + RainDrop helper
-├── sun.py           # Sun sprite
-├── moon.py          # Moon sprite (appears at night)
-├── stars.py         # Sparkling stars (appear at night)
-├── farming.py       # PlantSlot state + rendering helpers
-├── plants.py        # Plant type definitions (stats + sprite names)
-├── items.py         # Item registry and sell prices
-├── settings.py      # all tuneable constants live here
-├── requirements.txt
-│
-└── props/           # drop your PNG images here
-    ├── README.md    # lists expected filenames and sizes
-    ├── your prop images    # if you use one
+```text
+PassTheGame/
+├── main.py                  # entry point
+├── main_menu.py             # title screen and tutorial entry
+├── tutorial.py              # isolated 12-step teach-through-play tutorial
+├── game.py                  # main game loop, input, UI, saves
+├── settings.py              # tunable constants
+├── plants.py                # crop definitions and sprite filenames
+├── farming.py               # PlantSlot state and rendering helpers
+├── critters.py              # Squirrel, Snake, Bee
+├── crows.py                 # flying crows and Bell support
+├── minibosses.py            # Burrow Mole, Locust Pair, Glare Mote, Chill Wisp, Tangle Vine
+├── storm_titan.py           # Storm Titan
+├── cyclone_titan.py         # Cyclone Titan
+├── drought_titan.py         # Drought Titan
+├── frost_titan.py           # Frost Titan
+├── finalboss.py             # Inferno Titan
+├── market.py                # seed and tool license offers
+├── almanac.py               # seasonal goals and yearly difficulty
+├── endgame.py               # Legacy, preview, challenge ladder, Everbloom quest
+├── worker_prime.py          # worker and Prime harvest logic
+├── effects.py               # shared particle and tween helpers
+├── props/                   # PNG sprites and image asset README
+├── passthegame_audio/       # sound assets and SOURCES.md
+└── tests/selftest.py        # headless smoke test
 ```
 
-**Tip for contributors:** `settings.py` is the first place to look when you
-want to tweak speeds, colours, or counts.  Add new sprites as their own files
-and register them in `game.py`.
+## Contributor notes
 
+- Put tunable numbers in `settings.py`.
+- Add crop stats and sprite filenames in `plants.py`.
+- Add PNGs to `props/` and list them in `props/README.md`.
+- Put sound files in `passthegame_audio/`, not `props/`. Add source notes to `passthegame_audio/SOURCES.md`.
+- Run `python3 main.py` before opening a PR. For logic changes, also run `python3 tests/selftest.py`.
+
+For the PR workflow, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Contributors log
 
-Add your name and 1–2 lines about what you added below.
+Add your name and 1-2 lines about what you added below.
 
-- **Nancy**
-  Created the base game: blue sky, a movable cloud, rain on click, and a sun that darkens the sky when covered.
-
-- **Minh**
-  Added farming: buying/planting seeds, keep plant alive with rain and sun, sell products for profit.
-
-- **Danel**
-  Added night (transition to moon and stars), second cloud (WASD keys), "wind", pausing, apple tree that regrows to previous phase after harvesting apples
-
-- **Yousef**
-  Added Storm Titan + Cyclone Titan boss fights and chipmunk/snake plant-thief critters, including blocking and perfect-block combat behavior.
-  Expanded progression systems with seasons, weather, market modifiers, and tools (`Compost`, `Scarecrow`, `Lightning Rod`) plus drop/reward items.
-  Added five new crops (`Mushroom`, `Cactus`, `Rice`, `Night Bloom`, `Pumpkin`) and polished HUD/UX flow (market info, boss timers, sell confirmation).
-
-- **Mohamed**
-  Made a main menu.
-  Made a tutorial for the basic mechanics.
-  Made the game fullscreen. Future devs you might want to make it manually resizable for more flexibility but if not this is good enough and better than the previously tiny window.
-  Future devs, please add sounds!!!
-
-- **Noor**
-  Added a 'Quit' button to main menu.
-  Edited the pause UI.
-
-- **Rawan**
-  Reworked the per-plant sun/rain meters, added save/load with 2-min auto-save & save-aware main menu (New Game / Continue).
-  Redesigned the scarecrow (placeable and has durability meter) and the wooden top-left "Farm Status" HUD; added sprites for the five new crops (added 3 commits ago).
-  Added a seed-unlock shop where you can spend money to unlock some seeds.
-
-- **Funan**
-  Clarify cloud controls in the tutorial (arrow keys for the right cloud, WASD for the left cloud).
-  Add a visible Main Menu button during gameplay so players can exit without relying on ESC.
-  Extended the tutorial with sell flow, chipmunk/snake thieves, tools, bosses, and save/HUD basics.
-  Show how soon they are until they can sell their plant with progress bar
-  Added in-game help: seed/tool hover descriptions, Save button tip, and Sell All error feedback.
-
-- **Mohammed**
-  Made a more interactive homescreen by adding props, animated components, and background music that can be toggled on/off.
-  Introduced all the audio components/cues in the game, including planting, harvesting, night/day audio, critter alerts, plant warnings, and boss strikes.
-  Made a new directory in the project called passthegame_audio/ that includes all the audio files
-
-
-
----
-
-Let's see how wild this game becomes 👀
+- **Nancy**: Created the base sky, sun, cloud, and rain prototype.
+- **Minh**: Added farming, seed buying, plant care, harvests, and selling.
+- **Danel**: Added night, moon, stars, wind, pausing, a second cloud, and regrowing apple trees.
+- **Yousef**: Added early Titans, ground thieves, tools, market modifiers, and more crops.
+- **Mohamed**: Added the main menu, tutorial flow, fullscreen mode, and audio asset structure.
+- **Noor**: Added a Quit button and pause UI changes.
+- **Rawan**: Reworked meters, save/load, auto-save, scarecrow durability, HUD, and seed unlock UI.
+- **Funan**: Clarified tutorial controls, added the Main Menu button, and expanded in-game help.
+- **Mohammed**: Added animated home-screen props and audio cues under `passthegame_audio/`.
+- **Abdulrahman**: Added Almanac progression, five-Titan escalation, Drought/Frost/Inferno, perfect blocks, salted/blighted soil, market balance, golden crops, seasonal juice, crows, mini-bosses, bees, worker/Prime, Legacy, and Everbloom.

@@ -3,7 +3,7 @@
 Welcome! This file has the practical "how do I actually open a PR" details.
 The vibe / what-this-is-about lives in the [README](README.md).
 
-If anything below is unclear, ask in the Game Dev Club Discord — that's faster
+If anything below is unclear, ask in the Game Dev Club Discord - that's faster
 than guessing.
 
 ---
@@ -18,18 +18,17 @@ git clone https://github.com/GDC-CMU/PassTheGame.git
 cd PassTheGame
 
 # 2. Create a virtual environment (optional but strongly recommended)
-python -m venv venv
+python3 -m venv venv              # Windows: py -3 -m venv venv
 source venv/bin/activate         # Windows: venv\Scripts\activate
 
 # 3. Install dependencies
 pip install -r requirements.txt
 
 # 4. Run the game to make sure everything works
-python main.py
+python3 main.py                   # Windows: py -3 main.py
 ```
 
-If `python main.py` opens a window with a sky, a sun, and a cloud you can move
-with the arrow keys — you're set.
+If `python3 main.py` opens the game with a sky, a sun, two clouds, and a 10-slot farm, you're set. The right cloud should move with Arrow keys and the left cloud with WASD.
 
 ---
 
@@ -47,12 +46,18 @@ with the arrow keys — you're set.
    git checkout -b your-name
    ```
 3. **Do your thing.** Add a feature, fix a bug, add an asset, swap the sky for
-   a portal to another dimension — whatever fits "and now it's different".
+   a portal to another dimension - whatever fits "and now it's different".
 4. **Test that the game still runs.**
    ```bash
-   python main.py
+   python3 main.py
    ```
    If it crashes for you, it will crash for everyone else.
+
+   For logic changes (farming, save/load, economy), also run the headless
+   self-test. It needs no display and exits non-zero if anything broke:
+   ```bash
+   python3 tests/selftest.py
+   ```
 5. **Update the Contributors log** at the bottom of `README.md` with your name
    and one or two lines about what you added.
 6. **Commit and push.**
@@ -72,14 +77,15 @@ with the arrow keys — you're set.
 
 Before clicking "Create pull request", make sure:
 
-- [ ] The game still runs (`python main.py` opens the window without crashing)
+- [ ] The game still runs (`python3 main.py` opens the window without crashing)
+- [ ] Logic changes pass the headless self-test (`python3 tests/selftest.py`)
 - [ ] You added your name to the Contributors log in `README.md`
-- [ ] Your changes are something the next person can build on — no
+- [ ] Your changes are something the next person can build on - no
       hard-coded "only works on my machine" paths, no leftover debug prints
 - [ ] You haven't deleted or rewritten someone else's contribution unless
       you're clearly improving it
-- [ ] Any new assets (images, sounds) are in `props/` and listed in
-      `props/README.md`
+- [ ] Any new image assets are in `props/` and listed in `props/README.md`
+- [ ] Any new sound assets are in `passthegame_audio/`, not `props/`, with source notes in `passthegame_audio/SOURCES.md`
 - [ ] Your commit message says what you actually changed
 
 ---
@@ -95,16 +101,17 @@ Before clicking "Create pull request", make sure:
 - **Drop new images into `props/`** and follow the existing pattern: try to
   load the PNG, fall back to a drawn version if it isn't there. This means
   the game never crashes just because someone is missing a file.
+- **Drop new audio into `passthegame_audio/`**. Do not put sound files in `props/`. Add CC0/source notes to `passthegame_audio/SOURCES.md`.
 
 ---
 
 ## 5. Things that are fine
 
-- Vibe coding / using AI to help — encouraged
+- Vibe coding / using AI to help - encouraged
 - Tiny changes (one new key binding, one new colour, one extra cloud)
 - Huge changes (new game mode, physics, scoring, audio)
 - Breaking the existing aesthetic completely
-- Adding new dependencies — just remember to update `requirements.txt`
+- Adding new dependencies - just remember to update `requirements.txt`
 
 ---
 
@@ -121,7 +128,7 @@ Before clicking "Create pull request", make sure:
 ## 7. Stuck?
 
 Ping the organisers in the Game Dev Club Discord. If you hit a setup
-problem, paste the full error message — "it doesn't work" is hard to debug
+problem, paste the full error message - "it doesn't work" is hard to debug
 remotely.
 
 Have fun.

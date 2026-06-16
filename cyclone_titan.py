@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Iterable
 
 import pygame
 
@@ -15,6 +16,9 @@ from settings import (
     CYCLONE_TITAN_RETREAT_SECONDS,
     CYCLONE_TITAN_AOE_RADIUS_SLOTS,
     CYCLONE_TITAN_IMAGE_FILENAME,
+    CYCLONE_TITAN_SALT_SECONDS,
+    CYCLONE_TITAN_NODAMAGE_BONUS_ITEM_NAME,
+    CYCLONE_TITAN_NODAMAGE_BONUS_ITEM_COUNT,
 )
 from storm_titan import StormTitan, StormTitanConfig
 
@@ -40,6 +44,11 @@ class CycloneTitanConfig(StormTitanConfig):
     reward_item_name: str = "Cyclone Crystal"
     reward_item_count: int = 1
 
+    # Bigger boss salts longer; clean-fight bonus is a Cyclone Crystal.
+    salt_seconds: float = CYCLONE_TITAN_SALT_SECONDS
+    no_damage_bonus_item_name: str = CYCLONE_TITAN_NODAMAGE_BONUS_ITEM_NAME
+    no_damage_bonus_item_count: int = CYCLONE_TITAN_NODAMAGE_BONUS_ITEM_COUNT
+
     # Stronger attack: one-shot target + nearby slots.
     aoe_radius_slots: int = CYCLONE_TITAN_AOE_RADIUS_SLOTS
 
@@ -60,6 +69,9 @@ class CycloneTitanConfig(StormTitanConfig):
 
 class CycloneTitan(StormTitan):
     """Cyclone Titan boss: bigger, tankier, and does AoE one-shot strikes."""
+
+    boss_id = "cyclone"
+    display_name = "Cyclone Titan"
 
     def __init__(self, config: CycloneTitanConfig | None = None, *, rng=None):
         super().__init__(config or CycloneTitanConfig(), rng=rng)
