@@ -6,6 +6,10 @@
 
 A Python 3.9+ / pygame cozy farming-defense hybrid built by CMU Game Dev Club.
 
+## Enjoy the game here:
+
+[Play Farm Patch](https://eterna-studio.itch.io/farm-patch)
+
 ## What this is
 
 You manage a 10-slot farm with two movable clouds, one sun, and crops that only thrive inside their own water and sun bands. The right cloud uses Arrow keys. The left cloud uses WASD. Click a cloud to cycle rain Off, Light, and Heavy.
